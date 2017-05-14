@@ -29,7 +29,7 @@ class DataSample(object):
     def to_pandas(self):
         """
         Return a pandas DataFrame representation of this sample
-        :return: 
+        :rtype: pd.DataFrame 
         """
         pass
 

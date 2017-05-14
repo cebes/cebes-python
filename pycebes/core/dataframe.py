@@ -6,6 +6,7 @@ import six
 
 from pycebes.core.schema import Schema
 from pycebes.core.implicits import get_default_session
+from pycebes.core.sample import DataSample
 
 
 @six.python_2_unicode_compatible
@@ -58,11 +59,12 @@ class Dataframe(object):
 
     def take(self, n=10):
         """
-        Take a sample of this ``Dataframe``, return as a pandas' Dataframe 
-        :param n: 
-        :return: 
+        Take a sample of this ``Dataframe``
+        :param n: maximum number of rows to be taken
+        :rtype: DataSample
         """
-        return self._client.post_and_wait('df/take', {'df': self.id, 'n': n})
+        r = self._client.post_and_wait('df/take', {'df': self.id, 'n': n})
+        return DataSample.from_json(r)
 
     def sample(self, fraction=0.1, replacement=True, seed=42):
         """
@@ -74,5 +76,6 @@ class Dataframe(object):
         :rtype: Dataframe
         """
         r = self._client.post_and_wait(
-            'df/sample', {'df': self.id, 'fraction': fraction, 'withReplacement': replacement, 'seed': seed})
+            'df/sample', {'df': self.id, 'fraction': fraction,
+                          'withReplacement': replacement, 'seed': seed})
         return Dataframe.from_json(r)
