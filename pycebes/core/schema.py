@@ -46,7 +46,7 @@ class StorageTypes(enum.Enum):
     VECTOR = ('vector', list)
 
     ARRAY = ('array', list)
-    MAP = ('map', {})
+    MAP = ('map', dict)
     STRUCT = ('struct', list)
 
     @property
@@ -81,6 +81,11 @@ class SchemaField(object):
 class Schema(object):
     def __init__(self, fields=None):
         self.fields = fields
+
+    @property
+    def columns(self):
+        """A list of column names in this Schema"""
+        return [f.name for f in self.fields]
 
     def __repr__(self):
         return '{}(fields=[{}])'.format(

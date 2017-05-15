@@ -13,11 +13,13 @@ from pycebes.core.exceptions import ServerException
 
 class Client(object):
 
-    def __init__(self, host='localhost', port=21000, user_name='', password='', api_version='v1'):
+    def __init__(self, host='localhost', port=21000, user_name='',
+                 password='', api_version='v1', interactive=True):
         self.host = host
         self.port = port
-        self.api_version = api_version
         self.user_name = user_name
+        self.api_version = api_version
+        self.interactive = interactive
 
         self.session = requests.Session()
         self.session.headers.update({'Content-Type': 'application/json'})
@@ -63,7 +65,8 @@ class Client(object):
         :raises ServerException: if the request failed, e.g. an exception thrown on the server
         :raises ValueError: invalid status received from the server 
         """
-        print('Request ID: {}'.format(request_id))
+        if self.interactive:
+            print('Request ID: {}'.format(request_id))
 
         status = self.post('request/{}'.format(request_id), {})
         cnt = 0
