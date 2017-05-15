@@ -11,9 +11,22 @@ from pycebes.core.sample import DataSample
 
 @six.python_2_unicode_compatible
 class Dataframe(object):
+
     def __init__(self, _id, _schema):
         self._id = _id
         self._schema = _schema
+
+    @property
+    def _client(self):
+        """
+        Default client, taken from the current default session
+        :rtype: pycebes.core.client.Client
+        """
+        return get_default_session().client
+
+    """
+    Public properties and Python magics
+    """
 
     @property
     def id(self):
@@ -28,18 +41,31 @@ class Dataframe(object):
         return self._schema
 
     @property
-    def _client(self):
+    def shape(self):
         """
-        Default client, taken from the current default session
-        :rtype: pycebes.core.client.Client
+        Return a 2-tuple with number of rows and columns
         """
-        return get_default_session().client
+        return len(self), len(self.columns)
+
+    @property
+    def columns(self):
+        """
+        Return a list of column names in this ``Dataframe``
+        """
+        return self.schema.columns
 
     def __len__(self):
+        """
+        Number of rows in this ``Dataframe``
+        """
         return self._client.post_and_wait('df/count', data={'df': self.id})
 
     def __repr__(self):
         return '{}(id={!r})'.format(self.__class__.__name__, self.id)
+
+    """
+    Helpers
+    """
 
     @classmethod
     def from_json(cls, js_data):
@@ -79,3 +105,11 @@ class Dataframe(object):
             'df/sample', {'df': self.id, 'fraction': fraction,
                           'withReplacement': replacement, 'seed': seed})
         return Dataframe.from_json(r)
+
+    def show(self, n=5):
+        """
+        Convenient function to show basic information and sample rows from this Dataframe
+        :return: nothing
+        """
+        print('ID: {}\nShape: {}\nSample {} rows:\n{!r}'.format(
+            self.id, self.shape, n, self.take(n).to_pandas()))
