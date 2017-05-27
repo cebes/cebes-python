@@ -45,6 +45,7 @@ class StorageTypes(enum.Enum):
     DOUBLE = ('double', float)
     VECTOR = ('vector', list)
 
+    # TODO: re-do complex storage types
     ARRAY = ('array', list)
     MAP = ('map', dict)
     STRUCT = ('struct', list)
@@ -56,6 +57,13 @@ class StorageTypes(enum.Enum):
     @property
     def python_type(self):
         return self.value[1]
+
+    def to_json(self):
+        """
+        Return the JSON representation of this storage type
+        :return:
+        """
+        return self.cebes_type
 
     @classmethod
     def from_str(cls, s):

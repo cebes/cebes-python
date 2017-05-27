@@ -4,9 +4,9 @@ from __future__ import unicode_literals
 
 import six
 
-from pycebes.core.schema import Schema
-from pycebes.core.implicits import get_default_session
 from pycebes.core.sample import DataSample
+from pycebes.core.schema import Schema
+from pycebes.internal.implicits import get_default_session
 
 
 @six.python_2_unicode_compatible

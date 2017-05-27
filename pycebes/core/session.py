@@ -8,7 +8,7 @@ import six
 
 from pycebes.core.client import Client
 from pycebes.core.dataframe import Dataframe
-from pycebes.core.implicits import get_session_stack
+from pycebes.internal.implicits import get_session_stack
 
 
 @six.python_2_unicode_compatible

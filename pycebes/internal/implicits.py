@@ -2,7 +2,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from pycebes.core.default_stack import DefaultStack
+from pycebes.internal.default_stack import DefaultStack
 
 _default_session_stack = DefaultStack()
 
