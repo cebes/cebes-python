@@ -27,18 +27,38 @@ def param(name='param', param_type=None, server_name=None):
     def decorate(cls):
         assert issubclass(cls, Expression)
         if getattr(cls, 'PARAMS', None) is None:
-            setattr(cls, 'PARAMS', [])
+            cls.PARAMS = {}
+
+        class_name = cls.__name__
+        if class_name not in cls.PARAMS:
+            cls.PARAMS[class_name] = []
+
         pc = _ParamConfig(name, param_type, name if server_name is None else server_name)
-        if next((p for p in cls.PARAMS if p.name == pc.name), None) is not None:
+        if next((p for p in cls.PARAMS[class_name] if p.name == pc.name), None) is not None:
             raise ValueError('Duplicated parameter named {} in class {}'.format(pc.name, cls.__name__))
-        cls.PARAMS.append(pc)
+        cls.PARAMS[class_name].append(pc)
         return cls
 
     return decorate
 
 
+def server_namespace(ns='io.cebes.df.expressions'):
+    """
+    Decorator used for Expressions, to specify the namespace of this class on the server
+    """
+    def decorate(cls):
+        assert issubclass(cls, Expression)
+        setattr(cls, '_server_namespace', ns)
+        return cls
+    return decorate
+
+
+############################################################################
+
+
 @six.python_2_unicode_compatible
 class Expression(object):
+
     def __init__(self, **kwargs):
         param_names = {pc.name for pc in self._get_params()}
         for k, v in kwargs.items():
@@ -47,8 +67,7 @@ class Expression(object):
             setattr(self, k, v)
 
     def to_json(self):
-        class_ns = 'io.cebes.df.expressions'
-        js = {'className': '{}.{}'.format(class_ns, self.__class__.__name__)}
+        js = {'className': '{}.{}'.format(self._get_server_namespace(), self.__class__.__name__)}
         for pc in self._get_params():
             assert isinstance(pc, _ParamConfig)
             value = getattr(self, pc.name, None)
@@ -72,17 +91,23 @@ class Expression(object):
         """
         return value.to_json() if isinstance(value, Expression) else to_json(value, pc.param_type)
 
-    """
-    Private helpers
-    """
-
     def _get_params(self):
         """
         Return the list of params of this expression
         :rtype: list[_ParamConfig]
         """
-        return getattr(self, 'PARAMS', [])
+        params = []
+        for parent_class in self.__class__.__mro__:
+            params.extend(self.PARAMS.get(parent_class.__name__, []))
+        return params
 
+    @classmethod
+    def _get_server_namespace(cls):
+        return getattr(cls, '_server_namespace', 'io.cebes.df.expressions')
+
+
+############################################################################
+# Helpers subclasses of Expression
 
 @param('children')
 class _WithChildren(Expression):
@@ -162,7 +187,11 @@ class Count(_UnaryExpression):
 @param('expr')
 @param('exprs')
 class CountDistinct(Expression):
-    def __init__(self, expr, exprs=()):
+    def __init__(self, *exprs):
+        if len(exprs) == 0:
+            raise ValueError('Empty list of expressions for {}'.format(self.__class__.__name__))
+        expr = exprs[0]
+        exprs = exprs[1:]
         super(CountDistinct, self).__init__(expr=expr, exprs=exprs)
 
 
@@ -1058,3 +1087,16 @@ class UnBase64(_UnaryExpression):
 class Upper(_UnaryExpression):
     def __init__(self, child):
         super(Upper, self).__init__(child=child)
+
+
+"""
+Spark-specific
+"""
+
+
+@param('df_id', server_name='dfId')
+@param('col_name', server_name='colName')
+@server_namespace('io.cebes.spark.df.expressions')
+class SparkPrimitiveExpression(Expression):
+    def __init__(self, df_id='', col_name=''):
+        super(SparkPrimitiveExpression, self).__init__(df_id=df_id, col_name=col_name)
