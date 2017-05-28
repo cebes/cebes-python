@@ -57,10 +57,12 @@ def server_namespace(ns='io.cebes.df.expressions'):
     """
     Decorator used for Expressions, to specify the namespace of this class on the server
     """
+
     def decorate(cls):
         assert issubclass(cls, Expression)
         setattr(cls, '_server_namespace', ns)
         return cls
+
     return decorate
 
 
@@ -69,7 +71,6 @@ def server_namespace(ns='io.cebes.df.expressions'):
 
 @six.python_2_unicode_compatible
 class Expression(object):
-
     def __init__(self, **kwargs):
         param_names = {pc.name for pc in self._get_params()}
         for k, v in kwargs.items():
@@ -512,20 +513,20 @@ class BRound(_UnaryExpression):
 
 @param('num_bits', param_type='int', server_name='numBits')
 class ShiftLeft(_UnaryExpression):
-    def __init__(self, child, scale=5):
-        super(ShiftLeft, self).__init__(child=child, scale=scale)
+    def __init__(self, child, num_bits=5):
+        super(ShiftLeft, self).__init__(child=child, num_bits=num_bits)
 
 
 @param('num_bits', param_type='int', server_name='numBits')
 class ShiftRight(_UnaryExpression):
-    def __init__(self, child, scale=5):
-        super(ShiftRight, self).__init__(child=child, scale=scale)
+    def __init__(self, child, num_bits=5):
+        super(ShiftRight, self).__init__(child=child, num_bits=num_bits)
 
 
 @param('num_bits', param_type='int', server_name='numBits')
 class ShiftRightUnsigned(_UnaryExpression):
-    def __init__(self, child, scale=5):
-        super(ShiftRightUnsigned, self).__init__(child=child, scale=scale)
+    def __init__(self, child, num_bits=5):
+        super(ShiftRightUnsigned, self).__init__(child=child, num_bits=num_bits)
 
 
 class Signum(_UnaryExpression):
@@ -668,7 +669,152 @@ class GetField(_UnaryExpression):
 """
 datetime
 """
-# TODO: implement this
+
+
+@param('num_months', param_type='int', server_name='numMonths')
+class AddMonths(_UnaryExpression):
+    def __init__(self, child, num_months=1):
+        super(AddMonths, self).__init__(child=child, num_months=num_months)
+
+
+class CurrentDate(Expression):
+    def __init__(self):
+        super(CurrentDate, self).__init__()
+
+
+class CurrentTimestamp(Expression):
+    def __init__(self):
+        super(CurrentTimestamp, self).__init__()
+
+
+@param('fmt', server_name='format')
+class DateFormatClass(_UnaryExpression):
+    def __init__(self, child, fmt=''):
+        super(DateFormatClass, self).__init__(child=child, fmt=fmt)
+
+
+@param('days', param_type='int')
+class DateAdd(_UnaryExpression):
+    def __init__(self, child, days=1):
+        super(DateAdd, self).__init__(child=child, days=days)
+
+
+@param('days', param_type='int')
+class DateSub(_UnaryExpression):
+    def __init__(self, child, days=1):
+        super(DateSub, self).__init__(child=child, days=days)
+
+
+class DateDiff(_BinaryExpression):
+    def __init__(self, left, right):
+        super(DateDiff, self).__init__(left=left, right=right)
+
+
+class Year(_UnaryExpression):
+    def __init__(self, child):
+        super(Year, self).__init__(child=child)
+
+
+class Quarter(_UnaryExpression):
+    def __init__(self, child):
+        super(Quarter, self).__init__(child=child)
+
+
+class Month(_UnaryExpression):
+    def __init__(self, child):
+        super(Month, self).__init__(child=child)
+
+
+class DayOfMonth(_UnaryExpression):
+    def __init__(self, child):
+        super(DayOfMonth, self).__init__(child=child)
+
+
+class DayOfYear(_UnaryExpression):
+    def __init__(self, child):
+        super(DayOfYear, self).__init__(child=child)
+
+
+class Hour(_UnaryExpression):
+    def __init__(self, child):
+        super(Hour, self).__init__(child=child)
+
+
+class LastDay(_UnaryExpression):
+    def __init__(self, child):
+        super(LastDay, self).__init__(child=child)
+
+
+class Minute(_UnaryExpression):
+    def __init__(self, child):
+        super(Minute, self).__init__(child=child)
+
+
+class MonthsBetween(_BinaryExpression):
+    def __init__(self, left, right):
+        super(MonthsBetween, self).__init__(left=left, right=right)
+
+
+@param('day_of_week', server_name='dayOfWeek')
+class NextDay(_UnaryExpression):
+    def __init__(self, child, day_of_week=''):
+        super(NextDay, self).__init__(child=child, day_of_week=day_of_week)
+
+
+class Second(_UnaryExpression):
+    def __init__(self, child):
+        super(Second, self).__init__(child=child)
+
+
+class WeekOfYear(_UnaryExpression):
+    def __init__(self, child):
+        super(WeekOfYear, self).__init__(child=child)
+
+
+@param('fmt', server_name='format')
+class FromUnixTime(_UnaryExpression):
+    def __init__(self, child, fmt=''):
+        super(FromUnixTime, self).__init__(child=child, fmt=fmt)
+
+
+@param('fmt', server_name='format')
+class UnixTimestamp(_UnaryExpression):
+    def __init__(self, child, fmt=''):
+        super(UnixTimestamp, self).__init__(child=child, fmt=fmt)
+
+
+class ToDate(_UnaryExpression):
+    def __init__(self, child):
+        super(ToDate, self).__init__(child=child)
+
+
+@param('fmt', server_name='format')
+class TruncDate(_UnaryExpression):
+    def __init__(self, child, fmt=''):
+        super(TruncDate, self).__init__(child=child, fmt=fmt)
+
+
+@param('tz')
+class FromUTCTimestamp(_UnaryExpression):
+    def __init__(self, child, tz=''):
+        super(FromUTCTimestamp, self).__init__(child=child, tz=tz)
+
+
+@param('tz')
+class ToUTCTimestamp(_UnaryExpression):
+    def __init__(self, child, tz=''):
+        super(ToUTCTimestamp, self).__init__(child=child, tz=tz)
+
+
+@param('window_duration', server_name='windowDuration')
+@param('slide_duration', server_name='slideDuration')
+@param('start_time', server_name='startTime')
+class TimeWindow(_UnaryExpression):
+    def __init__(self, child, window_duration='', slide_duration='', start_time=''):
+        super(TimeWindow, self).__init__(child=child, window_duration=window_duration,
+                                         slide_duration=slide_duration,
+                                         start_time=start_time)
+
 
 """
 misc
@@ -687,7 +833,7 @@ class Sha1(_UnaryExpression):
 
 @param('num_bits', param_type='int', server_name='numBits')
 class Sha2(_UnaryExpression):
-    def __init__(self, child, num_bits=5):
+    def __init__(self, child, num_bits=0):
         super(Sha2, self).__init__(child=child, num_bits=num_bits)
 
 
@@ -903,7 +1049,7 @@ class Concat(_WithChildren):
 
 @param('sep')
 class ConcatWs(_WithChildren):
-    def __init__(self, sep='', children=()):
+    def __init__(self, children=(), sep=''):
         super(ConcatWs, self).__init__(sep=sep, children=children)
 
     @staticmethod
@@ -943,8 +1089,8 @@ class FormatNumber(_UnaryExpression):
 
 @param('fmt', server_name='format')
 class FormatString(_WithChildren):
-    def __init__(self, sep='', fmt=''):
-        super(FormatString, self).__init__(sep=sep, fmt=fmt)
+    def __init__(self, fmt='', children=()):
+        super(FormatString, self).__init__(fmt=fmt, children=children)
 
     @staticmethod
     def _param_to_json(pc, value):
@@ -992,11 +1138,11 @@ class StringLocate(_UnaryExpression):
         super(StringLocate, self).__init__(child=child, substr=substr, pos=pos)
 
 
-@param('padding', server_name='pad')
 @param('length', param_type='int', server_name='len')
+@param('padding', server_name='pad')
 class StringLPad(_UnaryExpression):
-    def __init__(self, child, padding='', length=0):
-        super(StringLPad, self).__init__(child=child, padding=padding, length=length)
+    def __init__(self, child, length=0, padding=''):
+        super(StringLPad, self).__init__(child=child, length=length, padding=padding)
 
 
 class StringTrimLeft(_UnaryExpression):
