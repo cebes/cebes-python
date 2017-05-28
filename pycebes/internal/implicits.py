@@ -9,18 +9,29 @@
 #
 # See the NOTICE file distributed with this work for information regarding copyright ownership.
 
+from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
-from __future__ import absolute_import
+
+from pycebes.internal.default_stack import DefaultStack
+
+_default_session_stack = DefaultStack()
 
 
-class ServerException(Exception):
+def get_default_session():
     """
-    Exception happened on the server, got catched and returned to the client
+    
+    :return: 
     """
+    ret = _default_session_stack.get_default()
+    if ret is None:
+        raise Exception('No default session found. You need to create a Session')
+    return ret
 
-    def __init__(self, message='', server_stack_trace='', request_uri='', request_entity=None):
-        super(ServerException, self).__init__(message, server_stack_trace, request_uri, request_entity)
-        self.server_stack_trace = server_stack_trace
-        self.request_uri = request_uri
-        self.request_entity = request_entity
+
+def get_session_stack():
+    """
+    Get the default session stack
+    :rtype: DefaultStack 
+    """
+    return _default_session_stack
