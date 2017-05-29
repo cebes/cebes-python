@@ -117,8 +117,9 @@ class Schema(object):
     def from_json(cls, js_data):
         """
         Parse the Schema from its JSON representation
+
         :param js_data: a dict with a key named ``fields``, 
-        which is a list of dict, containing the schema fields. Each field is a dict.
+            which is a list of dict, containing the schema fields. Each field is a dict.
         :type js_data: dict
         :rtype: Schema
         """

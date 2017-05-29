@@ -81,5 +81,27 @@ class TestDataframe(test_base.TestBase):
             self.cylinder_bands.sample(fraction=-0.6)
             self.assertTrue('Fraction must be nonnegative, but got -0.6' in cm.exception.message)
 
+    def test_sort(self):
+        df1 = self.cylinder_bands
+
+        df2 = df1.sort()
+        self.assertNotEqual(df1.id, df2.id)
+        self.assertEqual(len(df1), len(df2))
+
+        df2 = df1.sort(df1['timestamp'].asc, df1['customer'].desc)
+        self.assertNotEqual(df1.id, df2.id)
+        self.assertEqual(len(df1), len(df2))
+        sample2 = df2.take(50).to_pandas()
+        self.assertTrue(all(sample2.loc[i, 'timestamp'] <= sample2.loc[i + 1, 'timestamp']
+                            for i in range(len(sample2) - 1)))
+
+        df2 = df1.sort('timestamp', df1['customer'].desc)
+        self.assertNotEqual(df1.id, df2.id)
+        self.assertEqual(len(df1), len(df2))
+
+        with self.assertRaises(ValueError) as ex:
+            df1.sort('non_exist')
+            self.assertTrue('Column not found' in '{}'.format(ex.exception))
+
 if __name__ == '__main__':
     unittest.main()

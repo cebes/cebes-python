@@ -23,6 +23,9 @@ from pycebes.core.exceptions import ServerException
 
 
 class Client(object):
+    """
+    Represent a connection to the Cebes server. Normally created by a session.
+    """
 
     def __init__(self, host='localhost', port=21000, user_name='',
                  password='', api_version='v1', interactive=True):
@@ -38,24 +41,22 @@ class Client(object):
         self._check_server_version()
 
         # login
-        r = self.session.post(self.server_url('auth/login'),
+        r = self.session.post(self._server_url('auth/login'),
                               data=json.dumps({'userName': user_name, 'passwordHash': password}))
         self.session.headers.update({'Authorization': r.headers.get('Set-Authorization'),
                                      'Refresh-Token': r.headers.get('Set-Refresh-Token'),
                                      'X-XSRF-TOKEN': r.cookies.get('XSRF-TOKEN')})
 
-    def server_url(self, uri):
-        return 'http://{}:{}/{}/{}'.format(self.host, self.port, self.api_version, uri)
-
     def post(self, uri, data):
         """
         Send a POST request to the given uri, with the given data
         This function catches the exceptions.
+
         :return: a JSON object of the response
         :exception ConnectionError: if a connection to the server can't be established.
         :exception ValueError: if the response code is not OK
         """
-        response = self.session.post(self.server_url(uri), data=json.dumps(data))
+        response = self.session.post(self._server_url(uri), data=json.dumps(data))
         if response.status_code != requests.codes.ok:
             raise ValueError('Unsuccessful request: {}'.format(response.text))
         return response.json()
@@ -67,6 +68,7 @@ class Client(object):
          - at each iteration `i`: 
             - if result is ready, return
             - if not, sleep for `sleep_base * randint(0, [2 ** min(i, 7)] - 1)` seconds
+
         :param request_id: ID of the request to wait for
         :param sleep_base: base of 1 sleep, in seconds
         :param max_count: maximum number of iterations to wait for
@@ -107,6 +109,7 @@ class Client(object):
         """
         POST a request to the server, which is expected to return an ID that will be 
         used to checking the results in an exponential-backoff fashion.
+
         :return: a JSON object of the response
         """
         response = self.post(uri, data=data)
@@ -116,6 +119,13 @@ class Client(object):
                              'uri={}, response={}'.format(uri, response))
 
         return self.wait(request_id)
+
+    """
+    Private helpers
+    """
+
+    def _server_url(self, uri):
+        return 'http://{}:{}/{}/{}'.format(self.host, self.port, self.api_version, uri)
 
     def _check_server_version(self):
         """

@@ -51,6 +51,7 @@ class DataSample(object):
     def to_pandas(self, raise_if_error=False):
         """
         Return a pandas DataFrame representation of this sample
+
         :param raise_if_error: whether to raise exception when there is a type-cast error
         :rtype: pd.DataFrame
         """
@@ -64,7 +65,8 @@ class DataSample(object):
     @classmethod
     def from_json(cls, js_data):
         """
-        Parse the JSON result from the server 
+        Parse the JSON result from the server
+
         :param js_data: a dict with a key 'data' for the data part, and 'schema' for the data schema
         :rtype: DataSample
         """

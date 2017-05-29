@@ -50,6 +50,7 @@ class Session(object):
     def client(self):
         """
         Return the client which can be used to send requests to server
+
         :rtype: Client
         """
         return self._client
@@ -61,18 +62,20 @@ class Session(object):
         Use with the `with` keyword to specify that all remote calls to server
         should be executed in this session.
         
-        ```python
-        sess = cb.Session()
-        with sess.as_default():
-            ....
-        ```
-        
+        .. code-block:: python
+
+            sess = cb.Session()
+            with sess.as_default():
+                ....
+
         To get the current default session, use `get_default_session`.
         
-        *N.B.* The default session is a property of the current thread. If you
-        create a new thread, and wish to use the default session in that
-        thread, you must explicitly add a `with sess.as_default():` in that
-        thread's function.
+        .. note::
+
+            The default session is a property of the current thread. If you
+            create a new thread, and wish to use the default session in that
+            thread, you must explicitly add a `with sess.as_default():` in that
+            thread's function.
         
         :return: A context manager using this session as the default session.
         """
@@ -84,7 +87,8 @@ class Session(object):
 
     def _read(self, request):
         """
-        Read a Dataframe from the given request 
+        Read a Dataframe from the given request
+
         :rtype: Dataframe
         """
         return Dataframe.from_json(self._client.post_and_wait('storage/read', data=request))
@@ -101,10 +105,12 @@ class Session(object):
     def from_jdbc(self, url, table_name, user_name='', password=''):
         """
         Read a Dataframe from a JDBC table
+
         :param url: URL to the JDBC server
         :param table_name: name of the table
         :param user_name: JDBC user name
         :param password: JDBC password
+
         :rtype: Dataframe 
         """
         return self._read({
@@ -115,6 +121,7 @@ class Session(object):
     def from_hive(self, table_name=''):
         """
         Read a Dataframe from Hive table of the given name
+
         :param table_name: name of the Hive table to read data from
         :rtype: Dataframe 
         """
@@ -123,7 +130,9 @@ class Session(object):
     def from_id(self, identifier):
         """
         Get a ``Dataframe`` from the given tag or ID
-        :param identifier: either a ``Dataframe`` tag, or ID 
+
+        :param identifier: either a tag or an ID of a ``Dataframe`` to be retrieved.
+        :type identifier: six.text_type
         :rtype: Dataframe 
         """
         return Dataframe.from_json(self._client.post_and_wait('df/get', identifier))
