@@ -13,26 +13,24 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from pycebes.internal.default_stack import DefaultStack
+import datetime
+from collections import namedtuple
+from pycebes.core.schema import Schema
 
-_default_session_stack = DefaultStack()
+
+_TaggedDataframeInfo = namedtuple('_TaggedDataframeInfo', ('tag', 'id', 'created_at', 'schema'))
 
 
-def get_default_session():
+class TaggedDataframeResponse(object):
     """
-    
-    :return: 
+    Result of "df/tags"
     """
-    ret = _default_session_stack.get_default()
-    if ret is None:
-        raise Exception('No default session found. You need to create a Session')
-    return ret
+    def __init__(self, js_data):
+        self.tagged_dfs = []
+        for entry in js_data:
+            ts = datetime.datetime.utcfromtimestamp(entry['createdAt'] / 1E3)
+            schema = Schema.from_json(entry['schema'])
+            self.tagged_dfs.append(_TaggedDataframeInfo(entry['tag'], entry['id'], ts, schema))
 
-
-def get_session_stack():
-    """
-    Get the default session stack
-
-    :rtype: DefaultStack 
-    """
-    return _default_session_stack
+    def __repr__(self):
+        return '{!r}'.format(self.tagged_dfs)

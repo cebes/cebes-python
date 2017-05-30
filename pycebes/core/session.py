@@ -20,6 +20,7 @@ import six
 from pycebes.core.client import Client
 from pycebes.core.dataframe import Dataframe
 from pycebes.internal.implicits import get_session_stack
+from pycebes.internal.responses import TaggedDataframeResponse
 
 
 @six.python_2_unicode_compatible
@@ -141,6 +142,69 @@ class Session(object):
     Dataframe APIs
     """
 
-    def tags(self, max_count=100):
-        return self._client.post_and_wait('df/tags', {'maxCount': max_count})
+    def tag(self, obj, tag):
+        """
+        Tag the given object
 
+        :param obj: can be a ``Dataframe`` or a ``Pipeline``
+        :param tag: a string represent the tag
+        :type tag: six.text_type
+        :return: the given object if success
+        """
+        if isinstance(obj, Dataframe):
+            self._client.post_and_wait('df/tagadd', {'tag': tag, 'df': obj.id})
+            return obj
+        raise ValueError('Unsupported object of type {}'.format(type(obj)))
+
+    def untag_dataframe(self, tag):
+        """
+        Untag the ``Dataframe`` of the given tag. Note that if the ``Dataframe``
+        has more than 1 tag, it can still be accessed using other tags.
+
+        :param tag: the tag of the Dataframe to be removed
+        :type tag: six.text_type
+        :return: the Dataframe object if success
+        """
+        return Dataframe.from_json(self._client.post_and_wait('df/tagdelete', {'tag': tag}))
+
+    def untag_pipeline(self, tag):
+        """
+        Untag the ``Pipeline`` of the given tag. Note that if the ``Pipeline``
+        has more than 1 tag, it can still be accessed using other tags.
+
+        :param tag: the tag of the ``Pipeline`` to be removed
+        :type tag: six.text_type
+        :return: the Pipeline object if success
+        """
+        return self._client.post_and_wait('pipeline/tagdelete', {'tag': tag})
+
+    def dataframes(self, pattern=None, max_count=100):
+        """
+        Get the list of tagged Dataframes.
+
+        :param pattern: a pattern string to match the tags.
+            Simple wildcards are supported: use ``?`` to match 0 or 1 arbitrary character,
+            ``*`` to match 0 or more arbitrary characters.
+        :type pattern: six.text_type
+        :param max_count: maximum number of entries to be returned
+
+        :return:
+        """
+        data = {'maxCount': max_count}
+        if pattern is not None:
+            data['pattern'] = pattern
+        return TaggedDataframeResponse(self._client.post_and_wait('df/tags', data))
+
+    def pipelines(self, pattern=None, max_count=100):
+        """
+
+        :param pattern:
+        :param max_count:
+        :return:
+        """
+        raise NotImplementedError()
+
+
+"""
+Functional APIs for Session
+"""
