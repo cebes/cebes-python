@@ -19,6 +19,7 @@ import unittest
 import pandas as pd
 import six
 
+from pycebes.core import functions
 from pycebes.core.column import Column
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.exceptions import ServerException
@@ -28,7 +29,6 @@ from tests import test_base
 
 
 class TestDataframe(test_base.TestBase):
-
     def test_properties_and_magics(self):
         df = self.cylinder_bands
         self.assertIsInstance(df.id, six.text_type)
@@ -102,6 +102,79 @@ class TestDataframe(test_base.TestBase):
         with self.assertRaises(ValueError) as ex:
             df1.sort('non_exist')
             self.assertTrue('Column not found' in '{}'.format(ex.exception))
+
+    def test_groupby(self):
+        df = self.cylinder_bands
+
+        # with agg
+        df1 = df.groupby(df.customer).agg({'timestamp': 'max', 'job_number': 'avg'})
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 3)
+
+        df1 = df.groupby(df.customer).agg(functions.max(df.timestamp), functions.min('job_number'))
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 3)
+
+        with self.assertRaises(ValueError) as ex:
+            df.groupby(df.customer).agg({'timestamp': 'max', 'job_number': 'wrong_function'})
+            self.assertIn('Unsupported aggregation function', ex.exception)
+
+        with self.assertRaises(ServerException) as ex:
+            df.groupby(df.customer).agg({'timestamp': 'max', 'job_number_wrong': 'count'})
+            self.assertIn('Spark query analysis exception', ex.exception)
+
+        # with count
+        df1 = df.groupby(df.customer).count()
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 2)
+
+        # with min
+        df1 = df.groupby(df.customer).min()
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 25)
+        df1 = df.groupby(df.customer).min('job_number', 'hardener')
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 3)
+
+        with self.assertRaises(ValueError) as ex:
+            df.groupby(df.customer).min('job_number_wrong')
+            self.assertIn('Column not found', ex.exception)
+
+        with self.assertRaises(ServerException) as ex:
+            df.groupby(df.customer).min(df.proof_on_ctd_ink)
+            self.assertIn('"proof_on_ctd_ink" is not a numeric column', ex.exception)
+
+        # with max
+        df1 = df.groupby(df.customer).max()
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 25)
+        df1 = df.groupby(df.customer).max('job_number', 'hardener')
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 3)
+
+        # with avg
+        df1 = df.groupby(df.customer).avg()
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 25)
+        df1 = df.groupby(df.customer).mean('job_number', 'hardener')
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 3)
+
+        # with sum
+        df1 = df.groupby(df.customer).sum()
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 25)
+        df1 = df.groupby(df.customer).sum('job_number', 'hardener')
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 3)
+
+        # pivot
+        df1 = df.groupby(df.customer).pivot('proof_on_ctd_ink').count()
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 4)
+        df1 = df.groupby(df.customer).pivot('proof_on_ctd_ink', values=['YES', 'NO']).count()
+        self.assertGreater(len(df1), 10)
+        self.assertEqual(len(df1.columns), 4)
 
 if __name__ == '__main__':
     unittest.main()

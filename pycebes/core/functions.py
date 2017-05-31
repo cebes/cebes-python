@@ -46,6 +46,8 @@ def _with_expr(expr_class, cols, *args):
     """
     if isinstance(cols, (tuple, list)):
         cols = tuple(_get_column(c).expr for c in cols)
+    else:
+        cols = _get_column(cols).expr
     return Column(expr_class(cols, *args))
 
 
@@ -111,7 +113,7 @@ def count_distinct(*args):
     """
     returns the number of distinct items in a group
     """
-    cols = [_get_column(c) for c in args]
+    cols = [_get_column(c).expr for c in args]
     return Column(exprs.CountDistinct(*cols))
 
 

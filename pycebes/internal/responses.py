@@ -16,6 +16,7 @@ from __future__ import unicode_literals
 import datetime
 from collections import namedtuple
 from pycebes.core.schema import Schema
+import tabulate
 
 
 _TaggedDataframeInfo = namedtuple('_TaggedDataframeInfo', ('tag', 'id', 'created_at', 'schema'))
@@ -33,4 +34,11 @@ class TaggedDataframeResponse(object):
             self.tagged_dfs.append(_TaggedDataframeInfo(entry['tag'], entry['id'], ts, schema))
 
     def __repr__(self):
-        return '{!r}'.format(self.tagged_dfs)
+        n = len(self.tagged_dfs)
+        data = {'Tag': [None] * n, 'UUID': [None] * n, 'Schema': [None] * n, 'CreatedAt': [None]*n}
+        for idx, info in enumerate(self.tagged_dfs):
+            data['Tag'][idx] = info.tag
+            data['UUID'][idx] = info.id
+            data['Schema'][idx] = info.schema.simple_string
+            data['CreatedAt'][idx] = info.created_at
+        return tabulate.tabulate(data, headers='keys')

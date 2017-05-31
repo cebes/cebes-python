@@ -20,6 +20,57 @@ from pycebes.core.expressions import SparkPrimitiveExpression
 from pycebes.core.sample import DataSample
 from pycebes.core.schema import Schema
 from pycebes.internal.implicits import get_default_session
+from pycebes.internal.helpers import require
+from pycebes.internal.serializer import to_json
+from pycebes.core import functions
+
+
+def _parse_column_names(df, *columns):
+    """
+    Parse the list of column names (as strings) or ``Column`` objects which belong to this Dataframe
+
+    :param df: The ``Dataframe`` to parse the column names
+    :type df: Dataframe
+    :return: the list of column names, ready to be sent to the server
+    """
+    result = []
+    col_names = set(df.columns)
+    for c in columns:
+        if isinstance(c, six.text_type):
+            require(c in col_names, 'Column not found in this Dataframe: {}'.format(c))
+            result.append(c)
+        else:
+            require(isinstance(c, Column),
+                    'Only column names (strings) or `Column` objects are allowed. Got {!r}'.format(c))
+            expr = c.expr
+
+            # only Column objects backed by SparkPrimitiveExpression are accepted
+            require(isinstance(expr, SparkPrimitiveExpression),
+                    'Invalid column: {!r}. Only column objects constructed from a Dataframe is allowed. '
+                    'Use Dataframe.<column_name> or Dataframe["<column_name>"] to get one'.format(c))
+            require(expr.df_id == df.id, 'Column from a different Dataframe is not allowed: {!r}'.format(c))
+
+            result.append(expr.col_name)
+    return result
+
+
+def _parse_columns(df, *columns):
+    """
+    Parse the list of column names (as strings) or ``Column`` objects which belong to this Dataframe
+    This is similar to :func:`_parse_column_names`, but returns a list of ``Column`` object instead.
+
+    :return: the list of ``Column`` objects, ready to be sent to the server
+    """
+    cols = []
+    col_names = set(df.columns)
+    for c in columns:
+        if isinstance(c, six.text_type):
+            require(c in col_names, 'Column not found: {}'.format(c))
+            cols.append(df[c])
+        else:
+            require(isinstance(c, Column), 'Expect a column or a column name, got {!r}'.format(c))
+            cols.append(c)
+    return [c.to_json() for c in cols]
 
 
 @six.python_2_unicode_compatible
@@ -58,9 +109,7 @@ class Dataframe(object):
         :param js_data: a dict with ``id`` and ``schema``
         :rtype: Dataframe
         """
-        if 'id' not in js_data or 'schema' not in js_data:
-            raise ValueError('Invalid Dataframe JSON: {!r}'.format(js_data))
-
+        require('id' in js_data and 'schema' in js_data, 'Invalid Dataframe JSON: {!r}'.format(js_data))
         return Dataframe(_id=js_data['id'], _schema=Schema.from_json(js_data['schema']))
 
     """
@@ -167,8 +216,7 @@ class Dataframe(object):
         :param columns: list of columns
         :rtype: Dataframe
         """
-        if not all(isinstance(c, Column) for c in columns):
-            raise ValueError('Expect a list of Column objects')
+        require(all(isinstance(c, Column) for c in columns), 'Expect a list of Column objects')
         return self._df_command('select', df=self.id, cols=[col.to_json() for col in columns])
 
     def where(self, condition):
@@ -179,8 +227,7 @@ class Dataframe(object):
         :type condition: Column
         :rtype: Dataframe
         """
-        if not isinstance(condition, Column):
-            raise ValueError('condition: expect a Column object')
+        require(isinstance(condition, Column), 'condition: expect a Column object')
         return self._df_command('where', df=self.id, cols=[condition.to_json()])
 
     def limit(self, n=100):
@@ -237,8 +284,8 @@ class Dataframe(object):
         """
         join_types = ('inner', 'outer', 'left_outer', 'right_outer', 'leftsemi', 'leftanti', 'cross')
         join_type = join_type.lower()
-        if join_type not in join_types:
-            raise ValueError('Invalid join type: {}. Valid values are: {}'.format(join_type, ', '.join(join_types)))
+        require(join_type in join_types,
+                'Invalid join type: {}. Valid values are: {}'.format(join_type, ', '.join(join_types)))
 
         return self._df_command('join', leftDf=self.id, rightDf=other.id,
                                 joinExprs=expr.to_json(), joinType=join_type)
@@ -277,6 +324,47 @@ class Dataframe(object):
         """
         return self._df_command('withcolumnrenamed', df=self.id, existingName=existing_name, newName=new_name)
 
+    def groupby(self, *columns):
+        """
+        Groups the ``Dataframe`` using the specified columns, so that we can run aggregation on them.
+
+        See :class:`GroupedDataframe` for all the available aggregate functions.
+
+        :param columns: list of column names or ``Column`` objects
+        :return: ``GroupedDataframe`` object
+        :rtype: GroupedDataframe
+        """
+        return GroupedDataframe(df=self, agg_columns=_parse_columns(self, *columns),
+                                agg_type=GroupedDataframe.GROUPBY)
+
+    def rollup(self, *columns):
+        """
+        Create a multi-dimensional rollup for the current ``Dataframe`` using the specified columns,
+        so we can run aggregation on them.
+
+        See :class:`GroupedDataframe` for all the available aggregate functions.
+
+        :param columns: list of column names or ``Column`` objects
+        :return: ``GroupedDataframe`` object
+        :rtype: GroupedDataframe
+        """
+        return GroupedDataframe(df=self, agg_columns=_parse_columns(self, *columns),
+                                agg_type=GroupedDataframe.ROLLUP)
+
+    def cube(self, *columns):
+        """
+        Create a multi-dimensional cube for the current ``Dataframe`` using the specified columns,
+        so we can run aggregation on them.
+
+        See :class:`GroupedDataframe` for all the available aggregate functions.
+
+        :param columns: list of column names or ``Column`` objects
+        :return: ``GroupedDataframe`` object
+        :rtype: GroupedDataframe
+        """
+        return GroupedDataframe(df=self, agg_columns=_parse_columns(self, *columns),
+                                agg_type=GroupedDataframe.CUBE)
+
     """
     Exploratory functions
     """
@@ -301,14 +389,355 @@ class Dataframe(object):
             df1.sort('non_exist')
         """
         cols = []
+        col_names = set(self.columns)
         for c in args:
             if isinstance(c, six.text_type):
-                if c not in self.columns:
-                    raise ValueError('Column not found: {}'.format(c))
+                require(c in col_names, 'Column not found: {}'.format(c))
                 cols.append(self[c].asc.to_json())
-            elif isinstance(c, Column):
-                cols.append(c.to_json())
             else:
-                raise ValueError('Expect a column or a column name, got {!r}'.format(c))
+                require(isinstance(c, Column), 'Expect a column or a column name, got {!r}'.format(c))
+                cols.append(c.to_json())
 
         return self._df_command('sort', df=self.id, cols=cols)
+
+    def drop(self, *columns):
+        """
+        Drop columns in this ``Dataframe``
+
+        :param columns: column names
+        :return: a new ``Dataframe`` with the given columns dropped.
+            If ``columns`` is empty, this ``Dataframe`` is returned
+        """
+        col_names = _parse_column_names(self, *columns)
+        if len(col_names) == 0:
+            return self
+        return self._df_command('df/dropcolumns', df=self.id, colNames=col_names)
+
+    def drop_duplicates(self, *columns):
+        """
+        Returns a new Dataframe that contains only the unique rows from this Dataframe, only considered
+        the given list of columns.
+
+        If no columns are given (the default), all columns will be considered
+
+        :return: a new ``Dataframe`` with duplicated rows removed
+        """
+        col_names = _parse_column_names(self, *columns)
+        if len(col_names) == 0:
+            col_names = self.columns
+        return self._df_command('df/dropduplicates', df=self.id, colNames=col_names)
+
+    def dropna(self, how='any', thresh=None, columns=None):
+        """
+        Return object with labels on given axis omitted where some of the data are missing
+
+        :param how: strategy to drop rows. Accepted values are:
+            * ``any``: if any NA values are present, drop that label
+            * ``all``: if all values are NA, drop that label
+        :param thresh: drop rows containing less than ``thresh`` non-null and non-NaN values
+            If ``thresh`` is specified, ``how`` will be ignored.
+        :type thresh: int
+        :param columns: a list of columns to include. Default is None, meaning all columns are included
+        :return: a new ``Dataframe`` with NA values dropped
+        """
+        if columns is None:
+            columns = self.columns
+        columns = _parse_column_names(self, *columns)
+
+        min_non_null = thresh
+        if min_non_null is None:
+            require(how in ('any', 'all'), 'how={} is not supported. Only "any" or "all" are allowed'.format(how))
+            if how == 'any':
+                min_non_null = len(self.columns)
+            else:
+                min_non_null = 1
+        return self._df_command('df/dropna', df=self.id, minNonNulls=min_non_null, colNames=columns)
+
+    def fillna(self, value=None, columns=None):
+        """
+        Fill NA/NaN values using the specified value.
+
+        :param value: the value used to fill the holes. Can be a ``float``, ``string`` or a ``dict``.
+            When ``value`` is a dict, it is a map from column names to a value used to fill the holes in that column.
+            In this case the value can only be of type ``int``, ``float``, ``string`` or ``bool``.
+            The values will be casted to the column data type.
+        :param columns: List of columns to consider. If None, all columns are considered
+        :return: a new Dataframe with holes filled
+        :rtype: Dataframe
+        """
+        if columns is None:
+            columns = self.columns
+        columns = _parse_column_names(self, *columns)
+        if isinstance(value, (six.text_type, float)):
+            return self._df_command('df/fillna', df=self.id, value=value, colNames=columns)
+        if isinstance(value, dict):
+            return self._df_command('df/fillnawithmap', df=self.id, valueMap=to_json(value))
+        raise ValueError('Unsupported value: {!r}'.format(value))
+
+
+@six.python_2_unicode_compatible
+class GroupedDataframe(object):
+    GROUPBY = 'GroupBy'
+    ROLLUP = 'RollUp'
+    CUBE = 'Cube'
+
+    def __init__(self, df, agg_columns=(), agg_type=GROUPBY, pivot_column=None, pivot_values=()):
+        """
+
+        :type df: Dataframe
+        :param agg_columns: list of aggregate columns
+        :param agg_type: aggregation type
+        :param pivot_column: column name of pivot
+        :param pivot_values: pivot values
+        """
+        self.df = df
+        self.agg_type = agg_type
+        self.agg_columns = agg_columns
+        self.pivot_column = pivot_column
+        self.pivot_values = pivot_values
+
+    def __repr__(self):
+        return ('{}(df_id={!r}, agg_columns={!r}, agg_type={!r}, pivot_column={!r}, '
+                'pivot_values={!r})'.format(self.__class__.__name__,
+                                            self.df.id, self.agg_columns,
+                                            self.agg_type, self.pivot_column, self.pivot_values))
+
+    def _send_request(self, generic_agg_exprs=None, agg_func=None, agg_col_names=None):
+        client = get_default_session().client
+
+        data = {
+            'df': self.df.id,
+            'cols': self.agg_columns,
+            'aggType': self.agg_type,
+            'pivotValues': None,
+            'aggColNames': []
+        }
+        if self.pivot_column is not None:
+            data['pivotColName'] = self.pivot_column
+        if self.pivot_values is not None:
+            data['pivotValues'] = [to_json(v) for v in self.pivot_values]
+        if generic_agg_exprs is not None:
+            data['genericAggExprs'] = [c.to_json() for c in generic_agg_exprs]
+        if agg_func is not None:
+            data['aggFunc'] = agg_func
+        if agg_col_names is not None:
+            data['aggColNames'] = _parse_column_names(self.df, *agg_col_names)
+
+        return Dataframe.from_json(client.post_and_wait('df/aggregate', data))
+
+    def agg(self, *exprs):
+        """
+        Compute aggregates and returns the result as a DataFrame.
+
+        If exprs is a single dict mapping from string to string,
+        then the key is the column to perform aggregation on, and the value is the aggregate function.
+
+        The available aggregate functions are `avg`, `max`, `min`, `sum`, `count`.
+
+        Alternatively, exprs can also be a list of aggregate ``Column`` expressions.
+
+        :param exprs: a dict mapping from column name (string) to aggregate functions (string),
+            or a list of :class:`Column`
+
+        :Example:
+
+        .. code-block:: python
+
+            import pycebes as cb
+
+            df.groupby(df.customer).agg(cb.max(df.timestamp), cb.min('job_number'),
+                                        cb.count_distinct('job_number').alias('cnt')).show()
+                ...
+                       customer  max(timestamp)  min(job_number)  cnt
+                      WOOLWORTH        19920405            34227    5
+                       HOMESHOP        19910129            38064    1
+                   homeshopping        19920712            36568    1
+                         GLOBAL        19900621            36846    1
+                            JCP        19910322            34781    2
+
+            df.groupby(df.customer).agg({'timestamp': 'max', 'job_number': 'min', 'job_number': 'count'}).show()
+                ...
+                       customer  max(timestamp)  count(job_number)
+                      WOOLWORTH        19920405                  9
+                       HOMESHOP        19910129                  2
+                   homeshopping        19920712                  1
+                         GLOBAL        19900621                  1
+                            JCP        19910322                  4
+        """
+        agg_cols = []
+
+        if len(exprs) == 1 and isinstance(exprs[0], dict):
+            funcs = {'avg': functions.avg, 'max': functions.max,
+                     'min': functions.min, 'sum': functions.sum,
+                     'count': functions.count}
+
+            for col, func in exprs[0].items():
+                require(func in funcs, 'Unsupported aggregation function: {!r}'.format(func))
+                agg_cols.append(funcs[func](functions.col(col)))
+        else:
+            for expr in exprs:
+                require(isinstance(expr, Column), 'Expected a Column expression, got {!r}'.format(expr))
+                agg_cols.append(expr)
+
+        return self._send_request(generic_agg_exprs=agg_cols)
+
+    def count(self):
+        """
+        Counts the number of records for each group.
+
+        :Example:
+
+        .. code-block:: python
+
+            df.groupby(df.customer).count().show()
+                ...
+                      customer  count
+                     WOOLWORTH      9
+                      HOMESHOP      2
+                  homeshopping      1
+                        GLOBAL      1
+                           JCP      4
+
+            df.groupby(df.customer, 'proof_on_ctd_ink').count().show()
+                ...
+                       customer proof_on_ctd_ink  count
+                     GUIDEPOSTS              YES      5
+                       homeshop                       4
+                  colorfulimage                       1
+                      CASLIVING              YES      2
+                          ABBEY              YES      4
+
+        """
+        return self._send_request(agg_func='count')
+
+    def min(self, *columns):
+        """
+        Computes the min value for each numeric column for each group.
+
+        :param columns: list of column names (string). Non-numeric columns are ignored.
+        :Example:
+
+        .. code-block:: python
+
+            df.groupby(df.customer).min('hardener', 'wax').show()
+                ...
+                      customer  min(hardener)  min(wax)
+                     WOOLWORTH            0.0      0.00
+                      HOMESHOP            0.8      2.50
+                  homeshopping            NaN      2.50
+                        GLOBAL            1.1      3.00
+                           JCP            0.6      1.75
+
+        """
+        return self._send_request(agg_func='min', agg_col_names=columns)
+
+    def max(self, *columns):
+        """
+        Computes the max value for each numeric column for each group.
+
+        :param columns: list of column names (string). Non-numeric columns are ignored.
+        :Example:
+
+        .. code-block:: python
+
+            df.groupby(df.customer).max('hardener', 'wax').show()
+                ...
+                       customer  max(hardener)  max(wax)
+                      WOOLWORTH            1.3       2.6
+                       HOMESHOP            1.8       2.5
+                   homeshopping            NaN       2.5
+                         GLOBAL            1.1       3.0
+                            JCP            1.7       3.0
+        """
+        return self._send_request(agg_func='max', agg_col_names=columns)
+
+    def mean(self, *columns):
+        """
+        Computes the average value for each numeric column for each group.
+
+        :param columns: list of column names (string). Non-numeric columns are ignored.
+        :Example:
+
+        .. code-block:: python
+
+            df.groupby(df.customer).mean('hardener', 'wax').show()
+                ...
+                       customer  avg(hardener)  avg(wax)
+                      WOOLWORTH       0.811111  1.744444
+                       HOMESHOP       1.300000  2.500000
+                   homeshopping            NaN  2.500000
+                         GLOBAL       1.100000  3.000000
+                            JCP       0.975000  2.437500
+        """
+        return self._send_request(agg_func='mean', agg_col_names=columns)
+
+    avg = mean
+
+    def sum(self, *columns):
+        """
+        Computes the sum for each numeric column for each group.
+
+        :param columns: list of column names (string). Non-numeric columns are ignored.
+        :Example:
+
+        .. code-block:: python
+
+            df.groupby(df.customer).sum('hardener', 'wax').show()
+                ...
+                       customer  sum(hardener)  sum(wax)
+                      WOOLWORTH            7.3     15.70
+                       HOMESHOP            2.6      5.00
+                   homeshopping            NaN      2.50
+                         GLOBAL            1.1      3.00
+                            JCP            3.9      9.75
+        """
+        return self._send_request(agg_func='sum', agg_col_names=columns)
+
+    def pivot(self, column, values=None):
+        """
+        Pivots a column of the ``Dataframe`` and perform the specified aggregation.
+
+        :param column: Name of the column to pivot.
+        :type column: six.text_type
+        :param values: List of values that will be translated to columns in the output ``Dataframe``
+            If unspecified, Cebes will need to compute the unique values of the given column before
+            the pivot, therefore it will be less efficient.
+        :rtype: GroupedDataframe
+        :Example:
+
+        .. code-block:: python
+
+            # for each pair of (`customer`, `proof_on_ctd_ink`), count the number of entries
+            df.groupby(df.customer).pivot('proof_on_ctd_ink').count().show()
+                ...
+                       customer        NO  YES
+                      WOOLWORTH  1.0  1.0  7.0
+                       HOMESHOP  NaN  NaN  2.0
+                   homeshopping  1.0  NaN  NaN
+                         GLOBAL  NaN  NaN  1.0
+                            JCP  NaN  NaN  4.0
+
+            # for each pair of (`customer`, `proof_on_ctd_ink`), get the max value of `hardener`
+            df.groupby(df.customer).pivot('proof_on_ctd_ink').max('hardener').show()
+                ...
+                      customer        NO  YES
+                     WOOLWORTH  1.0  0.0  1.3
+                      HOMESHOP  NaN  NaN  1.8
+                  homeshopping  NaN  NaN  NaN
+                        GLOBAL  NaN  NaN  1.1
+                           JCP  NaN  NaN  1.7
+
+            # specify the pivot values, more efficient
+            df.groupby(df.customer).pivot('proof_on_ctd_ink', values=['YES', 'NO']).count().show()
+                ...
+                       customer  YES   NO
+                      WOOLWORTH  7.0  1.0
+                       HOMESHOP  2.0  NaN
+                   homeshopping  NaN  NaN
+                         GLOBAL  1.0  NaN
+                            JCP  4.0  NaN
+
+        """
+        return GroupedDataframe(df=self.df, agg_columns=self.agg_columns,
+                                agg_type=self.agg_type, pivot_column=column,
+                                pivot_values=values)

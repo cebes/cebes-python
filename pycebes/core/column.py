@@ -17,6 +17,7 @@ import six
 
 import pycebes.core.expressions as exprs
 from pycebes.core.schema import StorageTypes
+from pycebes.internal.helpers import require
 
 
 def lit(literal):
@@ -39,6 +40,7 @@ class Column(object):
         :param expr: Expression behind this column
         :type expr: exprs.Expression
         """
+        require(isinstance(expr, exprs.Expression), 'expr has to be an Expression, got {!r}'.format(expr))
         self.expr = expr
 
     def __repr__(self):
