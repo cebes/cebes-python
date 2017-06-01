@@ -17,11 +17,13 @@ import six
 
 import pycebes.core.expressions as exprs
 from pycebes.core.schema import StorageTypes
+from pycebes.internal.helpers import require
 
 
 def lit(literal):
     """
     Return a Column object containing the given literal
+
     :rtype: Column
     """
     if isinstance(literal, Column):
@@ -34,9 +36,11 @@ class Column(object):
     def __init__(self, expr):
         """
         Represent a column of a :ref:`Dataframe`, backed by an expression.
+
         :param expr: Expression behind this column
         :type expr: exprs.Expression
         """
+        require(isinstance(expr, exprs.Expression), 'expr has to be an Expression, got {!r}'.format(expr))
         self.expr = expr
 
     def __repr__(self):
@@ -51,6 +55,7 @@ class Column(object):
         Helper to return a new column with the given expression class, constructed
         with the current expression as the first argument, and
         other arguments in *args
+
         :rtype: Column
         """
         return Column(expr_class(self.expr, *args))
@@ -64,7 +69,8 @@ class Column(object):
     def to_json(self):
         """
         Serialize the Column into JSON format
-        :return:
+
+        :return: JSON representation of this Column
         """
         return {'expr': self.expr.to_json()}
 
@@ -78,6 +84,9 @@ class Column(object):
         Returns an ordering used in sorting.
 
         :Example:
+
+        .. code-block:: python
+
             df.sort(df.col1.desc)
         """
         return self._with_expr(exprs.SortOrder, exprs.SortOrder.Descending)
@@ -88,6 +97,9 @@ class Column(object):
         Returns an ordering used in sorting.
 
         :Example:
+
+        .. code-block:: python
+
             df.sort(df.col1.asc)
         """
         return self._with_expr(exprs.SortOrder, exprs.SortOrder.Ascending)
@@ -97,6 +109,9 @@ class Column(object):
         Unary minus, i.e. negate the expression.
 
         :Example:
+
+        .. code-block:: python
+
             df.select(-df.cost)
         """
         return self._with_expr(exprs.UnaryMinus)
@@ -110,7 +125,11 @@ class Column(object):
     def __invert__(self):
         """
         Inversion of boolean expression, i.e. NOT.
+
         :Example:
+
+        .. code-block:: python
+
             # select rows that are not rich (isRich === false)
             df.filter(!(df.isRich))
         """
@@ -121,6 +140,9 @@ class Column(object):
         Equality test.
 
         :Example:
+
+        .. code-block:: python
+
             df.filter(df.colA == df.colB)
         """
         return self._bin_op(exprs.EqualTo, other)
@@ -128,7 +150,11 @@ class Column(object):
     def __ne__(self, other):
         """
         Inequality test.
+
         :Example:
+
+        .. code-block:: python
+
             df.select(df.colA != df.colB)
         """
         return Column(exprs.Not(self.__eq__(other)))
@@ -136,6 +162,9 @@ class Column(object):
     def __gt__(self, other):
         """
         :Example:
+
+        .. code-block:: python
+
             # The following selects people older than 25.
             people.select(people.age > 25)
         """
@@ -144,6 +173,9 @@ class Column(object):
     def __lt__(self, other):
         """
         :Example:
+
+        .. code-block:: python
+
             # The following selects people younger than 25.
             people.select(people.age < 25)
         """
@@ -152,6 +184,9 @@ class Column(object):
     def __le__(self, other):
         """
         :Example:
+
+        .. code-block:: python
+
             # The following selects people younger than 25.
             people.select(people.age <= 25)
         """
@@ -160,6 +195,9 @@ class Column(object):
     def __ge__(self, other):
         """
         :Example:
+
+        .. code-block:: python
+
             # The following selects people younger than 25.
             people.select(people.age >= 25)
         """
@@ -168,7 +206,7 @@ class Column(object):
     def equal_null_safe(self, other):
         """
         Equality test that is safe for null values.
-         Returns same result with EQUAL(=) operator for non-null operands,
+        Returns same result with EQUAL(=) operator for non-null operands,
         but returns ``true`` if both are ``NULL``, ``false`` if one of the them is ``NULL``.
         """
         return self._bin_op(exprs.EqualNullSafe, other)
@@ -177,10 +215,15 @@ class Column(object):
         """
         Evaluates a list of conditions and returns one of multiple possible result expressions.
         If otherwise() is not defined at the end, `null` is returned for unmatched conditions.
+
         :param condition: the condition to be checked
         :param value: the output value if condition is true
         :rtype: Column
+
         :Example:
+
+        .. code-block:: python
+
 
             # encoding gender string column into integer.
             people.select(functions.when(people.gender == "male", 0)
@@ -202,7 +245,11 @@ class Column(object):
 
         :param value:
         :rtype: Column
+
         :Example:
+
+        .. code-block:: python
+
 
             # encoding gender string column into integer.
             people.select(functions.when(people.gender == "male", 0)
@@ -242,7 +289,10 @@ class Column(object):
     def __or__(self, other):
         """
         Boolean OR.
+
         :Example:
+
+        .. code-block:: python
 
             # Selects people that are in school or employed.
             people.filter(people.inSchool | people.isEmployed)
@@ -252,7 +302,10 @@ class Column(object):
     def __and__(self, other):
         """
         Boolean AND.
+
         :Example:
+
+        .. code-block:: python
 
             # Selects people that are in school and employed at the same time.
             people.select(people.inSchool & people.isEmployed)
@@ -262,7 +315,10 @@ class Column(object):
     def __add__(self, other):
         """
         Sum of this expression and another expression. Only work on numeric columns.
+
         :Example:
+
+        .. code-block:: python
 
             # Selects the sum of a person's height and weight.
             people.select(people.height + people.weight)
@@ -272,7 +328,10 @@ class Column(object):
     def __sub__(self, other):
         """
         Subtraction. Subtract the other expression from this expression. Only work on numeric columns.
+
         :Example:
+
+        .. code-block:: python
 
             # Selects the difference between people's height and their weight.
             people.select(people.height - people.weight)
@@ -282,7 +341,10 @@ class Column(object):
     def __mul__(self, other):
         """
         Multiplication of this expression and another expression. Only work on numeric columns.
+
         :Example:
+
+        .. code-block:: python
 
             # Multiplies a person's height by their weight
             people.select(people.height * people.weight)
@@ -292,7 +354,11 @@ class Column(object):
     def __truediv__(self, other):
         """
          Division this expression by another expression. Only work on numeric columns.
+
         :Example:
+
+        .. code-block:: python
+
             # Divides a person's height by their weight
             people.select(people.height / people.weight)
         """
@@ -314,6 +380,7 @@ class Column(object):
     def like(self, literal):
         """
         SQL like expression. Result will be a BooleanType column
+
         :param literal: a string
         """
         if not isinstance(literal, six.text_type):
@@ -323,6 +390,7 @@ class Column(object):
     def rlike(self, literal):
         """
         SQL RLIKE expression (LIKE with Regex). Result will be a BooleanType column
+
         :param literal: a string
         """
         if not isinstance(literal, six.text_type):
@@ -345,7 +413,9 @@ class Column(object):
     def substr(self, start_pos, length):
         """
         An expression that returns a substring.
+
         .. note::
+
             This is not zero-based, but 1-based index. The first character in str has index 1.
 
             ``start_pos`` and ``length`` are handled specially:
@@ -353,6 +423,7 @@ class Column(object):
                 * ``"Content".substr(-100, 2)`` gives ``""``
                 * ``"Content".substr(-100, 102)`` gives ``"Content"``
                 * ``"Content".substr(2, 100)`` gives ``"ontent"``
+
         :param start_pos: starting position, can be an integer, or a ``Column`` that gives an integer
         :param length: length of the sub-string, can be an integer, or a ``Column`` that gives an integer
         """
@@ -367,6 +438,7 @@ class Column(object):
     def starts_with(self, other):
         """
         String starts with.
+
         :param other: string to test, can be a string, or a ``Column``  that gives a string
         """
         return self._bin_op(exprs.StartsWith, other)
@@ -374,6 +446,7 @@ class Column(object):
     def ends_with(self, other):
         """
         String ends with.
+
         :param other: string to test, can be a string, or a ``Column``  that gives a string
         """
         return self._bin_op(exprs.StartsWith, other)
@@ -384,6 +457,8 @@ class Column(object):
         that returns more than one column (such as ``explode``).
 
         :Example:
+
+        .. code-block:: python
 
             # Renames colA to colB in select output.
             df.select(df.colA.alias('colB'))
@@ -397,7 +472,7 @@ class Column(object):
 
     def name(self, *alias):
         """
-        Gives the column a name. Same as :ref:`alias`
+        Gives the column a name. Same as :func:`alias`
         """
         return self.alias(*alias)
 
@@ -407,7 +482,11 @@ class Column(object):
 
         :param to: the StorageType to cast to
         :type to: StorageTypes
+
         :Example:
+
+        .. code-block:: python
+
             # Casts colA to [[IntegerType]].
             df.select(df.colA.cast(IntegerType))
             df.select(df.colA.cast("int"))
@@ -419,7 +498,10 @@ class Column(object):
     def bitwise_or(self, other):
         """
         Compute bitwise OR of this expression with another expression.
+
         :Example:
+
+        .. code-block:: python
 
             df.select(df.colA.bitwise_or(df.colB))
         """
@@ -428,7 +510,10 @@ class Column(object):
     def bitwise_and(self, other):
         """
         Compute bitwise AND of this expression with another expression.
+
         :Example:
+
+        .. code-block:: python
 
             df.select(df.colA.bitwise_and(df.colB))
         """
@@ -437,7 +522,10 @@ class Column(object):
     def bitwise_xor(self, other):
         """
         Compute bitwise XOR of this expression with another expression.
+
         :Example:
+
+        .. code-block:: python
 
             df.select(df.colA.bitwise_xor(df.colB))
         """
@@ -445,4 +533,13 @@ class Column(object):
 
     @property
     def bitwise_not(self):
+        """
+        Compute bitwise NOT of this expression
+
+        :Example:
+
+        .. code-block:: python
+
+            df.select(df.colA.bitwise_not)
+        """
         return self._with_expr(exprs.BitwiseNot)

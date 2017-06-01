@@ -106,6 +106,18 @@ class Schema(object):
         """A list of column names in this Schema"""
         return [f.name for f in self.fields]
 
+    @property
+    def simple_string(self):
+        """Return a simple description of this schema, mainly used for brevity"""
+        n = 3
+        if len(self.fields) <= 0:
+            s = '(empty)'
+        else:
+            s = ', '.join('{} {}'.format(f.name, f.storage_type.cebes_type) for f in self.fields[:n])
+            if len(self.fields) > n:
+                s += '... (+{} columns)'.format(len(self.fields) - n)
+        return s
+
     def __repr__(self):
         return '{}(fields=[{}])'.format(
             self.__class__.__name__, ','.join('{!r}'.format(f) for f in self.fields))
@@ -117,8 +129,9 @@ class Schema(object):
     def from_json(cls, js_data):
         """
         Parse the Schema from its JSON representation
+
         :param js_data: a dict with a key named ``fields``, 
-        which is a list of dict, containing the schema fields. Each field is a dict.
+            which is a list of dict, containing the schema fields. Each field is a dict.
         :type js_data: dict
         :rtype: Schema
         """

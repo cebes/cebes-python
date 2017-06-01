@@ -32,6 +32,7 @@ def get_default_session():
 def get_session_stack():
     """
     Get the default session stack
+
     :rtype: DefaultStack 
     """
     return _default_session_stack

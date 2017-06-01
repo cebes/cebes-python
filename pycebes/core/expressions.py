@@ -84,10 +84,6 @@ class Expression(object):
             assert isinstance(pc, _ParamConfig)
             value = getattr(self, pc.name, None)
             js[pc.server_name] = self._param_to_json(pc, value)
-            if isinstance(value, Expression):
-                js[pc.server_name] = value.to_json()
-            else:
-                js[pc.server_name] = to_json(value, pc.param_type)
         return js
 
     def __repr__(self):
@@ -205,6 +201,15 @@ class CountDistinct(Expression):
         expr = exprs[0]
         exprs = exprs[1:]
         super(CountDistinct, self).__init__(expr=expr, exprs=exprs)
+
+    @staticmethod
+    def _param_to_json(pc, value):
+        if pc.name == 'expr':
+            assert isinstance(value, Expression)
+            return value.to_json()
+        if pc.name == 'exprs':
+            return [v.to_json() for v in value]
+        return Expression._param_to_json(pc, value)
 
 
 class CovPopulation(_BinaryExpression):
