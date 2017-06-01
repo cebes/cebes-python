@@ -15,7 +15,7 @@ from __future__ import unicode_literals
 
 import pandas as pd
 import six
-
+import warnings
 from pycebes.core.schema import Schema
 from pycebes.internal.serializer import from_json
 
@@ -55,11 +55,23 @@ class DataSample(object):
         :param raise_if_error: whether to raise exception when there is a type-cast error
         :rtype: pd.DataFrame
         """
-        df = pd.DataFrame()
-        for f, c in zip(self.schema.fields, self.data):
-            df[f.name] = c
-            df[f.name] = df[f.name].astype(dtype=f.storage_type.python_type,
-                                           errors='raise' if raise_if_error else 'ignore')
+        if len(self.data) == 0:
+            return pd.DataFrame()
+
+        data = []
+        n_rows = len(self.data[0])
+        for i in range(n_rows):
+            data.append([c[i] for c in self.data])
+
+        col_names = self.schema.columns
+        df = pd.DataFrame(columns=col_names, data=data)
+
+        if len(set(col_names)) < len(col_names):
+            warnings.warn('DataSample has duplicated column names. Type casting will not be performed')
+        else:
+            for f in self.schema.fields:
+                df[f.name] = df[f.name].astype(dtype=f.storage_type.python_type,
+                                               errors='raise' if raise_if_error else 'ignore')
         return df
 
     @classmethod

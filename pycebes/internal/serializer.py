@@ -100,6 +100,6 @@ def to_json(value, param_type=None):
         assert param_type in ('wrapped_array', 'seq')
         return _to_js_object(param_type, [to_json(vv) for vv in value])
     if isinstance(value, dict):
-        return _to_js_object('map', [{to_json(k): to_json(v)} for k, v in value.items()])
+        return _to_js_object('map', [{'key': to_json(k), 'val': to_json(v)} for k, v in value.items()])
 
     raise ValueError('Failed to serialize value: {!r}'.format(value))

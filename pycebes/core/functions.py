@@ -1033,8 +1033,12 @@ def substring(column, pos=0, l=1):
     Substring starts at ``pos`` and is of length ``l`` when str is String type or
     returns the slice of byte array that starts at ``pos`` in byte and is of length ``l``
     when ``column`` is Binary type
+
+    :param column: a ``Column`` object, or a column name
+    :param pos: starting position, can be an integer, or a ``Column`` with its expression giving an integer value
+    :param l: length of the substring, can be an integer, or a ``Column`` with its expression giving an integer value
     """
-    return _with_expr(exprs.Substring, column, pos, l)
+    return _with_expr(exprs.Substring, column, lit(pos).expr, lit(l).expr)
 
 
 def substring_index(column, delim=' ', cnt=1):
