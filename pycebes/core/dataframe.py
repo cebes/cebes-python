@@ -384,7 +384,13 @@ class Dataframe(object):
 
         .. code-block:: python
 
-           df1.join(df2, df1.df1Key == df2.df2Key, join_type='outer')
+            df1.join(df2, df1.df1Key == df2.df2Key, join_type='outer')
+
+            # for self-joins, you should rename the columns so that they are accessible after the join
+            df1 = df.where(df.wax > 2).select(df[c].alias('df1_{}'.format(c)) for c in df.columns)
+            df2 = df.where(df.wax < 2.2).select(df[c].alias('df2_{}'.format(c)) for c in df.columns)
+
+            df_join = df1.join(df2, df1.df1_customer == df2.df2_customer)
 
         :param other: right side of the join
         :type other: Dataframe

@@ -12,3 +12,5 @@
 from pycebes.core.session import Session
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.functions import *
+from pycebes.core.pipeline import Pipeline
+from pycebes.core.pipeline_api import *
