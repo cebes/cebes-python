@@ -97,7 +97,7 @@ def to_json(value, param_type=None):
 
     if isinstance(value, (list, tuple)):
         param_type = param_type or 'seq'
-        assert param_type in ('wrapped_array', 'seq')
+        assert param_type in ('array', 'wrapped_array', 'seq')
         return _to_js_object(param_type, [to_json(vv) for vv in value])
     if isinstance(value, dict):
         return _to_js_object('map', [{'key': to_json(k), 'val': to_json(v)} for k, v in value.items()])
