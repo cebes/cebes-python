@@ -15,10 +15,53 @@ from __future__ import unicode_literals
 
 import six
 
-from pycebes.core.stages import SlotDescriptor
-from pycebes.core.stages import Stage, MessageTypes
+from pycebes.core.stages import SlotDescriptor, Stage, MessageType, Placeholder
 from pycebes.internal.helpers import require
 from pycebes.internal.implicits import get_pipeline_stack, get_default_session
+
+
+class Model(object):
+    """
+    Represent a trained model
+    """
+
+    def __init__(self, _id, model_class, inputs, metadata):
+        self._id = _id
+        self._model_class = model_class
+        self._metadata = metadata
+        self._inputs = {}
+        for k, v in inputs.items():
+            param_name = ''.join('_{}'.format(c.lower()) if c.isupper() else c for c in k)
+            self._inputs[param_name] = v
+
+    def __repr__(self):
+        return '{}(id={!r},model_class={!r})'.format(self.__class__.__name__, self.id, self._model_class)
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def metadata(self):
+        return dict(**self._metadata)
+
+    @property
+    def inputs(self):
+        return dict(**self._inputs)
+
+    @classmethod
+    def from_json(cls, js_data):
+        """
+        Deserialize a Model received from the server
+
+        :param js_data: JSON data received from server
+        :rtype: Model
+        """
+        inputs = {}
+        for k, v in js_data.get('inputs', {}).items():
+            inputs[k] = MessageType.from_json(v)
+        return Model(_id=js_data['id'], model_class=js_data['modelClass'], inputs=inputs,
+                     metadata=js_data.get('metaData', {}))
 
 
 class Pipeline(object):
@@ -63,6 +106,9 @@ class Pipeline(object):
         :type stage: Stage
         :return: the given stage
         """
+        if stage in self._stages:
+            return stage
+
         if stage.get_name() is None:
             # give this a name
             name_template = '{}_{{}}'.format(stage.__class__.__name__.lower())
@@ -74,7 +120,8 @@ class Pipeline(object):
             stage.set_name(new_name)
         else:
             if next((s for s in self._stages if s.get_name() == stage.get_name()), None) is not None:
-                raise ValueError('Duplicated stage name: {}'.format(stage.name))
+                raise ValueError('Duplicated stage name: {}'.format(stage.get_name()))
+
         self._stages.append(stage)
         return stage
 
@@ -99,17 +146,28 @@ class Pipeline(object):
             single_output = True
             outputs = [outputs]
         output_slots = []
+
         for o in outputs:
-            require(isinstance(o, SlotDescriptor), 'Expected an output slot, got {!r}'.format(o))
-            output_slots.append(o.to_json())
+            # convenience: automatically translate placeholders into its input slot
+            slot_desc = o
+            if isinstance(slot_desc, Placeholder):
+                slot_desc = slot_desc.input_val
+            require(isinstance(slot_desc, SlotDescriptor), 'Expected an output slot, got {!r}'.format(o))
+            output_slots.append(slot_desc.to_json())
 
         feeds = feeds or {}
         feeds_json = {}
         for k, v in feeds.items():
-            require(isinstance(k, SlotDescriptor), 'Expected output slots as keys in `feeds`, got {!r}'.format(k))
-            if not k.message_type.is_valid(v):
-                raise ValueError('Invalid value {!r} for slot {!r}'.format(v, k))
-            feeds_json[k.full_name] = k.message_type.to_json(v)
+            # convenience: automatically translate placeholders into its input slot
+            slot_desc = k
+            if isinstance(slot_desc, Placeholder):
+                slot_desc = slot_desc.input_val
+
+            require(isinstance(slot_desc, SlotDescriptor),
+                    'Expected slots as keys in `feeds`, got {!r}'.format(slot_desc))
+            require(slot_desc.message_type.is_valid(v), 'Invalid value {!r} for slot {!r}'.format(v, slot_desc))
+
+            feeds_json[slot_desc.full_server_name] = slot_desc.message_type.to_json(v)
 
         data = {'pipeline': self.to_json(),
                 'feeds': feeds_json,
@@ -117,22 +175,13 @@ class Pipeline(object):
                 'timeout': timeout}
 
         result = get_default_session().client.post_and_wait('pipeline/run', data)
+
+        # parse the results
         require(len(result) == len(output_slots), 'Invalid result from server')
         parsed_results = []
         for out_slot in output_slots:
             r = next((v for k, v in result if k == out_slot), None)
             require(r is not None, 'Could not find result for output slot {}'.format(out_slot))
-            msg_type = r[0]
-            msg_content = r[1]
-
-            if msg_type == MessageTypes.DATAFRAME.value:
-                r = get_default_session().from_id(msg_content['dfId'])
-            elif msg_type == MessageTypes.VALUE.value:
-                raise NotImplementedError('{}'.format(r))
-            elif msg_type == MessageTypes.COLUMN.value:
-                raise NotImplementedError('{}'.format(r))
-            else:
-                raise NotImplementedError('{}'.format(r))
-            parsed_results.append(r)
+            parsed_results.append(MessageType.from_json(r))
 
         return parsed_results[0] if single_output else tuple(parsed_results)

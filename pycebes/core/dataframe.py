@@ -13,17 +13,18 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import six
 import types
 
+import six
+
+from pycebes.core import functions
 from pycebes.core.column import Column
 from pycebes.core.expressions import SparkPrimitiveExpression, UnresolvedColumnName
 from pycebes.core.sample import DataSample
 from pycebes.core.schema import Schema
-from pycebes.internal.implicits import get_default_session
 from pycebes.internal.helpers import require
+from pycebes.internal.implicits import get_default_session
 from pycebes.internal.serializer import to_json
-from pycebes.core import functions
 
 
 def _parse_column_names(df, *columns):
@@ -722,7 +723,7 @@ class Dataframe(object):
         if min_non_null is None:
             require(how in ('any', 'all'), 'how={} is not supported. Only "any" or "all" are allowed'.format(how))
             if how == 'any':
-                min_non_null = len(self.columns)
+                min_non_null = len(columns)
             else:
                 min_non_null = 1
         return self._df_command('dropna', df=self.id, minNonNulls=min_non_null, colNames=columns)
