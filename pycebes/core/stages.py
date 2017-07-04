@@ -13,7 +13,6 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import enum
 import functools
 from collections import namedtuple
 
@@ -22,74 +21,135 @@ import six
 from pycebes.core.column import Column
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.sample import DataSample
+from pycebes.internal import serializer
 from pycebes.internal.helpers import require
-from pycebes.internal.serializer import to_json
+from pycebes.internal.implicits import get_default_session
 
 # _Slot is the internal representation of a slot, belong to the class, not the object
 # It is used to keep information about how to communicate with the server
 _Slot = namedtuple('_Slot', ('name', 'message_type', 'is_input', 'server_name'))
 
 
-class MessageTypes(enum.Enum):
-    VALUE = 'ValueDef'
-    STAGE_OUTPUT = 'StageOutputDef'
-    DATAFRAME = 'DataframeMessageDef'
-    SAMPLE = 'SampleMessageDef'
-    MODEL = 'ModelMessageDef'
-    COLUMN = 'ColumnDef'
+class MessageType(object):
+    VALUE_DEF = 'ValueDef'
+    STAGE_OUTPUT_DEF = 'StageOutputDef'
+    DATAFRAME_DEF = 'DataframeMessageDef'
+    SAMPLE_DEF = 'SampleMessageDef'
+    MODEL_DEF = 'ModelMessageDef'
+    COLUMN_DEF = 'ColumnDef'
+
+    __all_defs = [VALUE_DEF, STAGE_OUTPUT_DEF, DATAFRAME_DEF, SAMPLE_DEF, MODEL_DEF, COLUMN_DEF]
+
+    def __init__(self, msg_type=VALUE_DEF, value_type=None):
+        require(msg_type in self.__all_defs, 'Invalid msg_type: {!r}'.format(msg_type))
+        self.msg_type = msg_type
+        self.value_type = value_type
+
+    def __repr__(self):
+        return '{}(msg_type={!r},value_type={!r})'.format(self.__class__.__name__, self.msg_type, self.value_type)
 
     def is_valid(self, value):
         """
         Check if the given value is valid with the Message type
         :param value: value to be checked
         """
-        _types = {MessageTypes.VALUE: (int, float, six.text_type, list, tuple, dict),
-                  MessageTypes.DATAFRAME: Dataframe,
-                  MessageTypes.SAMPLE: DataSample,
-                  MessageTypes.COLUMN: Column}
+        if value is None:
+            return True
+
+        _types = {self.VALUE_DEF: (int, float, six.text_type, list, tuple, dict),
+                  self.DATAFRAME_DEF: Dataframe,
+                  self.SAMPLE_DEF: DataSample,
+                  self.COLUMN_DEF: Column}
 
         for k, value_type in _types.items():
-            if self == k:
+            if self.msg_type == k:
                 if isinstance(value, SlotDescriptor):
                     # in case  the value is a output slot, its type
                     # must be the same with the type of this message type
-                    return value.message_type == k
+                    return value.message_type.msg_type == k
                 return isinstance(value, value_type)
 
-        if self == MessageTypes.MODEL:
+        if self.msg_type == self.MODEL_DEF:
             # TODO: implement models
             raise NotImplementedError()
 
-        assert self == MessageTypes.STAGE_OUTPUT
+        require(self.msg_type == self.STAGE_OUTPUT_DEF, 'Unrecognized message type: {}'.format(self.msg_type))
         return isinstance(value, SlotDescriptor)
 
     def to_json(self, value):
         """
         Serialize the given value to JSON format, given the message type
         """
-        assert value is None or self.is_valid(value)
+        require(self.is_valid(value), 'Invalid value for message type {!r}: {!r}'.format(self, value))
 
+        returned_msg_type = self.msg_type
         if value is None:
             js = None
-        elif self == MessageTypes.VALUE:
-            # special json logic
-            if isinstance(value, (list, tuple)):
-                js = to_json(value, param_type='array')
-            else:
-                js = to_json(value)
-        elif self == MessageTypes.STAGE_OUTPUT:
+
+        elif isinstance(value, SlotDescriptor):
+            # stage output message
+            require(value.message_type.msg_type == self.msg_type,
+                    'Incompatible message type between input slot of type {!r} and '
+                    'output slot {!r}'.format(self, value))
+            returned_msg_type = self.STAGE_OUTPUT_DEF
             js = value.to_json()
-        elif self == MessageTypes.DATAFRAME:
+
+        elif self.msg_type == self.VALUE_DEF:
+            js = serializer.to_json(value, param_type=self.value_type)
+        elif self.msg_type == self.STAGE_OUTPUT_DEF:
+            js = value.to_json()
+        elif self.msg_type == self.DATAFRAME_DEF:
             js = {'dfId': value.id}
-        elif self == MessageTypes.SAMPLE:
+        elif self.msg_type == self.SAMPLE_DEF:
             raise NotImplementedError()
-        elif self == MessageTypes.MODEL:
+        elif self.msg_type == self.MODEL_DEF:
             raise NotImplementedError()
         else:
-            assert self == MessageTypes.COLUMN
+            require(self.msg_type == self.COLUMN_DEF, 'Unrecognized message type: {}'.format(self.msg_type))
             js = value.to_json()
-        return [self.value, js]
+        return [returned_msg_type, js]
 
+    @classmethod
+    def from_json(cls, js_data):
+        """
+        Read a PipelineMessageDef (from server) to the value
+
+        :param js_data: a list of 2 elelements, see ``to_json()`` for more information
+        :return: value read from the JSON result
+        """
+        require(len(js_data) == 2, 'Invalid JSON data: {!r}'.format(js_data))
+        msg_type = js_data[0]
+        msg_content = js_data[1]
+
+        if msg_type == MessageType.VALUE_DEF:
+            return serializer.from_json(msg_content)
+        if msg_type == MessageType.DATAFRAME_DEF:
+            return get_default_session().dataframe.get(msg_content['dfId'])
+        if msg_type == MessageType.MODEL_DEF:
+            return get_default_session().model.get(msg_content['modelId'])
+        if msg_type == MessageType.COLUMN_DEF:
+            raise NotImplementedError('{}'.format(js_data))
+
+        raise NotImplementedError('{}'.format(js_data))
+
+
+class MessageTypes(object):
+    VALUE = MessageType(MessageType.VALUE_DEF)
+    STAGE_OUTPUT = MessageType(MessageType.STAGE_OUTPUT_DEF)
+    DATAFRAME = MessageType(MessageType.DATAFRAME_DEF)
+    SAMPLE = MessageType(MessageType.SAMPLE_DEF)
+    MODEL = MessageType(MessageType.MODEL_DEF)
+    COLUMN = MessageType(MessageType.COLUMN_DEF)
+
+    @classmethod
+    def value(cls, value_type=None):
+        """Same with VALUE, but user has the chance to specify a custom value type for the value"""
+        return MessageType(MessageType.VALUE_DEF, value_type=value_type)
+
+
+##############################################################################
+
+##############################################################################
 
 class SlotDescriptor(object):
     """
@@ -118,7 +178,7 @@ class SlotDescriptor(object):
     @property
     def parent_name(self):
         """Returns the name of the parent stage"""
-        return self.parent.get_input(self.parent.name)
+        return self.parent.get_name()
 
     @property
     def _parent_slot(self):
@@ -133,15 +193,20 @@ class SlotDescriptor(object):
 
     @property
     def full_name(self):
-        """Return the fully qualified name, normally in the format ``<parent name>:<server name>``"""
+        """Return the fully qualified name, normally in the format ``<parent name>:<name>``"""
         return '{}:{}'.format(self.parent_name, self.name)
+
+    @property
+    def full_server_name(self):
+        """Return the fully qualified name, normally in the format ``<parent name>:<server name>``"""
+        return '{}:{}'.format(self.parent_name, self.server_name)
 
     @property
     def message_type(self):
         """Return the message type of this slot.
         Computed by looking up the parent
 
-        :rtype: MessageTypes
+        :rtype: MessageType
         """
         return self._parent_slot.message_type
 
@@ -152,6 +217,7 @@ class SlotDescriptor(object):
         return {'stageName': self.parent.get_input(self.parent.name),
                 'outputName': self.server_name}
 
+
 ####################################################################################
 
 ####################################################################################
@@ -160,6 +226,7 @@ class SlotDescriptor(object):
 def _get_slots(cls, is_input=True):
     """
     Get the list of slots of the given class
+    :type cls: Type
     """
     slots = []
     for parent_class in cls.mro():
@@ -169,7 +236,7 @@ def _get_slots(cls, is_input=True):
     return slots
 
 
-def _add_slot(name='', message_type=MessageTypes.VALUE, server_name=None, is_input=True):
+def _add_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc='', is_input=True):
     def decorate(cls):
         class_name = cls.__name__
         if class_name not in cls.SLOTS:
@@ -188,18 +255,39 @@ def _add_slot(name='', message_type=MessageTypes.VALUE, server_name=None, is_inp
                 setattr(self, slot_desc_attr, slot_desc)
             return slot_desc
 
-        setattr(cls, s.name, property(fget=functools.partial(prop_get, s.name, is_input)))
+        prop_doc = '{} slot of type {}: {}'.format('Input' if is_input else 'Output',
+                                                   message_type.msg_type, doc)
+        setattr(cls, s.name, property(fget=functools.partial(prop_get, s.name, is_input), doc=prop_doc))
         return cls
 
     return decorate
 
 
-def input_slot(name='', message_type=MessageTypes.VALUE, server_name=None):
-    return _add_slot(name=name, message_type=message_type, server_name=server_name, is_input=True)
+def input_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc=''):
+    """
+    Create an input slot for the Stage
+
+    :param name: name of the slot
+    :param message_type: type of the message used to transport the slot value
+    :param server_name: optionally, the name of this input on the server. If not specified,
+    it is the same with ``name``.
+    :param doc: Brief documentation explaining the slot
+    """
+    return _add_slot(name=name, message_type=message_type,
+                     server_name=server_name, doc=doc, is_input=True)
 
 
-def output_slot(name='', message_type=MessageTypes.VALUE, server_name=None):
-    return _add_slot(name=name, message_type=message_type, server_name=server_name, is_input=False)
+def output_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc=''):
+    """
+    Create an output slot for the Stage
+
+    :param name: name of the slot
+    :param message_type: type of the message used to transport the slot value
+    :param server_name: optionally, the name of this input on the server. If not specified,
+    it is the same with ``name``.
+    :param doc: Brief documentation explaining the slot
+    """
+    return _add_slot(name=name, message_type=message_type, server_name=server_name, doc=doc, is_input=False)
 
 
 ####################################################################################
@@ -222,15 +310,16 @@ class Stage(object):
                              for s in _get_slots(self.__class__, True))
         return '{}({})'.format(self.__class__.__name__, slot_desc)
 
-    @classmethod
-    def slot(cls, slot_name='', is_input=True):
+    def __dir__(self):
+        return dir(type(self)) + [p.name for p in _get_slots(self.__class__, True) + _get_slots(self.__class__, False)]
+
+    def slot(self, slot_name='', is_input=True):
         """
         Return the slot with the given name
         :rtype: _Slot
         """
-        s = next((s for s in _get_slots(cls, is_input) if s.name == slot_name), None)
-        if s is None:
-            raise ValueError('Slot name {} not found in class {}'.format(slot_name, cls.__name__))
+        s = next((s for s in _get_slots(self.__class__, is_input) if s.name == slot_name), None)
+        require(s is not None, 'Slot name {} not found in class {}'.format(slot_name, self.__class__.__name__))
         return s
 
     def set_inputs(self, **kwargs):
@@ -270,8 +359,14 @@ class Stage(object):
         """
         require(isinstance(slot_desc, SlotDescriptor) and slot_desc.parent is self and slot_desc.is_input,
                 'Not a slot descriptor or it does not belong to this instance: {!r}'.format(slot_desc))
-        require(slot_desc.message_type.is_valid(value),
-                'Invalid type of value {!r} for slot {}'.format(value, slot_desc.full_name))
+        if isinstance(value, SlotDescriptor):
+            # output slot of another stage
+            require((not value.is_input) and value.message_type.msg_type == slot_desc.message_type.msg_type,
+                    'Slot {!r} is not an output or of incompatible type for input slot {!r}'.format(
+                        value, slot_desc))
+        else:
+            require(slot_desc.message_type.is_valid(value),
+                    'Invalid type of value {!r} for slot {}'.format(value, slot_desc.full_name))
         self._slot_values[slot_desc.name] = value
         return self
 
@@ -289,6 +384,9 @@ class Stage(object):
         return self._slot_values.get(slot_desc.name, default)
 
     def to_json(self):
+        """
+        Serialize the stage into JSON
+        """
         inputs = {}
         for s in _get_slots(self.__class__, True):
             if s.name != 'name':
@@ -323,11 +421,136 @@ class _BinaryTransformer(Stage):
 class _Estimator(Stage):
     pass
 
-####################################################################################
+
+@input_slot('input_col', MessageTypes.VALUE, 'inputCol')
+class _HasInputCol(Stage):
+    pass
+
+
+@input_slot('input_cols', MessageTypes.value(value_type='array'), 'inputCols')
+class _HasInputCols(Stage):
+    pass
+
+
+@input_slot('output_col', MessageTypes.VALUE, 'outputCol')
+class _HasOutputCol(Stage):
+    pass
+
 
 ####################################################################################
 
+####################################################################################
 
-@input_slot('col_names', MessageTypes.VALUE, server_name='colNames')
+
+class Placeholder(Stage):
+    """
+    General parent class for all placeholders.
+    Mostly for coding convenience, not actually used in the APIs.
+    """
+    pass
+
+
+@input_slot('input_val', MessageTypes.VALUE, server_name='inputVal')
+@output_slot('output_val', MessageTypes.VALUE, server_name='outputVal')
+class ValuePlaceholder(Placeholder):
+
+    def __init__(self, value_type=None):
+        super(ValuePlaceholder, self).__init__()
+
+        # overwrite the actual input slot and output slot, to incorporate custom `value_type`
+        msg_type = MessageTypes.VALUE if value_type is None else MessageTypes.value(value_type=value_type)
+        self._input_val_slot = _Slot('input_val', msg_type, True, 'inputVal')
+        self._output_val_slot = _Slot('output_val', msg_type, False, 'outputVal')
+
+    def slot(self, slot_name='', is_input=True):
+        # override this function to return the custom slots created in the constructor
+        # this is to order to take into account custom `value_type` and make sure serialization works
+        # especially for tricky types like list and so on.
+        if slot_name == 'input_val':
+            return self._input_val_slot
+        if slot_name == 'output_val':
+            return self._output_val_slot
+        return super(ValuePlaceholder, self).slot(slot_name=slot_name, is_input=is_input)
+
+
+@input_slot('input_val', MessageTypes.DATAFRAME, server_name='inputVal')
+@output_slot('output_val', MessageTypes.DATAFRAME, server_name='outputVal')
+class DataframePlaceholder(Placeholder):
+    pass
+
+
+@input_slot('input_val', MessageTypes.COLUMN, server_name='inputVal')
+@output_slot('output_val', MessageTypes.COLUMN, server_name='outputVal')
+class ColumnPlaceholder(Placeholder):
+    pass
+
+
+"""
+ETL stages
+"""
+
+
+@input_slot('col_names', MessageTypes.value(value_type='array'), server_name='colNames')
 class Drop(_UnaryTransformer):
+    pass
+
+
+"""
+Feature extractors
+"""
+
+
+@input_slot('labels', MessageTypes.value(value_type='array'))
+class IndexToString(_UnaryTransformer, _HasInputCol, _HasOutputCol):
+    pass
+
+
+@output_slot('model', MessageTypes.MODEL)
+class StringIndexer(_UnaryTransformer, _HasInputCol, _HasOutputCol):
+    pass
+
+
+class VectorAssembler(_UnaryTransformer, _HasInputCols, _HasOutputCol):
+    pass
+
+
+"""
+ML stages
+"""
+
+
+@input_slot('features_col', MessageTypes.VALUE, server_name='featuresCol')
+class _HasFeaturesCol(Stage):
+    pass
+
+
+@input_slot('label_col', MessageTypes.VALUE, server_name='labelCol')
+class _HasLabelCol(Stage):
+    pass
+
+
+@input_slot('prediction_col', MessageTypes.VALUE, server_name='predictionCol')
+class _HasPredictionCol(Stage):
+    pass
+
+
+@input_slot('probability_col', MessageTypes.VALUE, server_name='probabilityCol')
+class _HasProbabilityCol(Stage):
+    pass
+
+
+@input_slot('aggregation_depth', MessageTypes.VALUE, server_name='aggregationDepth')
+@input_slot('elastic_net_param', MessageTypes.value(value_type='double'), server_name='elasticNetParam')
+@input_slot('fit_intercept', MessageTypes.VALUE, server_name='fitIntercept')
+@input_slot('max_iter', MessageTypes.VALUE, server_name='maxIter')
+@input_slot('reg_param', MessageTypes.value(value_type='double'), server_name='regParam')
+@input_slot('standardization', MessageTypes.VALUE, server_name='standardization')
+@input_slot('tolerance', MessageTypes.value(value_type='double'), server_name='tolerance')
+@input_slot('weight_col', MessageTypes.VALUE, server_name='weightCol')
+@input_slot('solver', MessageTypes.VALUE, server_name='solver')
+class _LinearRegressionInputs(_HasFeaturesCol, _HasLabelCol, _HasPredictionCol):
+    pass
+
+
+class LinearRegression(_Estimator, _LinearRegressionInputs):
     pass
