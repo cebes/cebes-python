@@ -45,6 +45,10 @@ class TestPipeline(test_base.TestBase):
         self.assertTrue('hardener' not in df2.columns)
         self.assertTrue('customer' not in df2.columns)
 
+        # magic methods
+
+        # access stages in the pipeline using stage name
+
     def test_placeholder(self):
         with Pipeline() as ppl:
             data = pl.placeholder(pl.PlaceholderTypes.DATAFRAME)

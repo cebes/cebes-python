@@ -124,9 +124,9 @@ class MessageType(object):
         if msg_type == MessageType.VALUE_DEF:
             return serializer.from_json(msg_content)
         if msg_type == MessageType.DATAFRAME_DEF:
-            return get_default_session().from_id(msg_content['dfId'])
+            return get_default_session().dataframe.get(msg_content['dfId'])
         if msg_type == MessageType.MODEL_DEF:
-            return get_default_session().model(msg_content['modelId'])
+            return get_default_session().model.get(msg_content['modelId'])
         if msg_type == MessageType.COLUMN_DEF:
             raise NotImplementedError('{}'.format(js_data))
 

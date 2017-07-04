@@ -44,7 +44,7 @@ class _TaggedDataframeResponseEntry(_TaggedResponseEntry):
 class _TaggedModelResponseEntry(_TaggedResponseEntry):
     def __init__(self, js_entry):
         super(_TaggedModelResponseEntry, self).__init__(js_entry)
-        self.model_class = js_entry['modelClass']
+        self.model_class = js_entry['model']['modelClass']
 
     def to_dict(self):
         d = super(_TaggedModelResponseEntry, self).to_dict()
@@ -55,7 +55,7 @@ class _TaggedModelResponseEntry(_TaggedResponseEntry):
 class _TaggedPipelineResponseEntry(_TaggedResponseEntry):
     def __init__(self, js_entry):
         super(_TaggedPipelineResponseEntry, self).__init__(js_entry)
-        self.n_stages = len(js_entry['stages'])
+        self.n_stages = len(js_entry['pipeline']['stages'])
 
     def to_dict(self):
         d = super(_TaggedPipelineResponseEntry, self).to_dict()

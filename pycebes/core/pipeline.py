@@ -83,6 +83,7 @@ class Pipeline(object):
     def __contains__(self, item):
         """
         Check if the given stage or stage name belong to this pipeline
+
         :param item: stage name (string) or a stage object
         :return: true if the given stage belong to this pipeline
         """
@@ -124,6 +125,17 @@ class Pipeline(object):
 
         self._stages.append(stage)
         return stage
+
+    @classmethod
+    def from_json(cls, js_data):
+        """
+        Return a ``Pipeline`` instance from its JSON representation
+
+        :param js_data: a dict with ``id`` and ``stages``
+        :rtype: Pipeline
+        """
+        # TODO: decide what to do here
+        return Pipeline(js_data['id'], None)
 
     def to_json(self):
         """
@@ -169,18 +181,25 @@ class Pipeline(object):
 
             feeds_json[slot_desc.full_server_name] = slot_desc.message_type.to_json(v)
 
-        data = {'pipeline': self.to_json(),
+        # intentionally set the pipeline ID in the request to be None, so that a new pipeline will be created
+        # and a new ID is generated
+        ppl_json = self.to_json()
+        ppl_json['id'] = None
+
+        data = {'pipeline': ppl_json,
                 'feeds': feeds_json,
                 'outputs': output_slots,
                 'timeout': timeout}
 
-        result = get_default_session().client.post_and_wait('pipeline/run', data)
+        run_result = get_default_session().client.post_and_wait('pipeline/run', data)
+
+        self._id = run_result['pipelineId']
 
         # parse the results
-        require(len(result) == len(output_slots), 'Invalid result from server')
+        require(len(run_result['results']) == len(output_slots), 'Invalid result from server')
         parsed_results = []
         for out_slot in output_slots:
-            r = next((v for k, v in result if k == out_slot), None)
+            r = next((v for k, v in run_result['results'] if k == out_slot), None)
             require(r is not None, 'Could not find result for output slot {}'.format(out_slot))
             parsed_results.append(MessageType.from_json(r))
 
