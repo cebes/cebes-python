@@ -12,13 +12,14 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
+
 import unittest
 
-from tests import test_base
-from pycebes.core.pipeline import Pipeline, Model
 from pycebes.core import pipeline_api as pl
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.exceptions import ServerException
+from pycebes.core.pipeline import Pipeline, Model
+from tests import test_base
 
 
 class TestPipeline(test_base.TestBase):
@@ -36,9 +37,8 @@ class TestPipeline(test_base.TestBase):
     def test_drop(self):
         df = self.cylinder_bands
         with Pipeline() as ppl:
-            d = pl.drop(df, ['hardener', 'customer'])
+            d = pl.drop(df, ['hardener', 'customer'], name='drop_stage')
 
-        print(ppl.to_json())
         df2 = ppl.run(d.output_df)
         self.assertIsInstance(df2, Dataframe)
         self.assertEqual(len(df2.columns) + 2, len(df.columns))
@@ -46,8 +46,9 @@ class TestPipeline(test_base.TestBase):
         self.assertTrue('customer' not in df2.columns)
 
         # magic methods
-
-        # access stages in the pipeline using stage name
+        self.assertTrue(d in ppl)
+        self.assertTrue('drop_stage' in ppl)
+        self.assertEqual(d, ppl['drop_stage'])
 
     def test_placeholder(self):
         with Pipeline() as ppl:

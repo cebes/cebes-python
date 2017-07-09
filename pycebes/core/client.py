@@ -20,6 +20,8 @@ import time
 import requests
 
 from pycebes.core.exceptions import ServerException
+from pycebes.internal.helpers import require
+from requests_toolbelt import MultipartEncoderMonitor
 
 
 class Client(object):
@@ -47,6 +49,32 @@ class Client(object):
                                      'Refresh-Token': r.headers.get('Set-Refresh-Token'),
                                      'X-XSRF-TOKEN': r.cookies.get('XSRF-TOKEN')})
 
+    def upload(self, path):
+        """
+        Upload the given path to the server, return the JSON response
+
+        :param path: path to the file to be uploaded
+        :return: a dict object with 'path' and 'size'
+        """
+
+        def callback(encoder):
+            if self.interactive:
+                n = 20
+                pct = encoder.bytes_read / encoder.len
+                l = int(round(n * pct))
+                s = '\rUploading: {}{} {:.0f}%'.format('.' * l, ' ' * (max(0, n - l)), pct * 100)
+                print(s, end='')
+
+        with open(path, 'rb') as f:
+            monitor = MultipartEncoderMonitor.from_fields(fields={'file': f}, callback=callback)
+            headers = {'Content-Type': monitor.content_type}
+
+            response = self.session.put(self._server_url('storage/upload'), data=monitor, headers=headers)
+            require(response.status_code == requests.codes.ok, 'Unsuccessful request: {}'.format(response.text))
+            if self.interactive:
+                print('')
+            return response.json()
+
     def post(self, uri, data):
         """
         Send a POST request to the given uri, with the given data
@@ -57,8 +85,7 @@ class Client(object):
         :exception ValueError: if the response code is not OK
         """
         response = self.session.post(self._server_url(uri), data=json.dumps(data))
-        if response.status_code != requests.codes.ok:
-            raise ValueError('Unsuccessful request: {}'.format(response.text))
+        require(response.status_code == requests.codes.ok, 'Unsuccessful request: {}'.format(response.text))
         return response.json()
 
     def wait(self, request_id, sleep_base=0.5, max_count=100):
@@ -114,10 +141,8 @@ class Client(object):
         """
         response = self.post(uri, data=data)
         request_id = response.get('requestId', None)
-        if request_id is None:
-            raise ValueError('Request ID not found. Maybe this is not an asynchronous command? '
-                             'uri={}, response={}'.format(uri, response))
-
+        require(request_id is not None, 'Request ID not found. Maybe this is not an asynchronous command? '
+                                        'uri={}, response={}'.format(uri, response))
         return self.wait(request_id)
 
     """
@@ -133,9 +158,8 @@ class Client(object):
         Raise ValueError if that is not the case.
         """
         r = self.session.get('http://{}:{}/version'.format(self.host, self.port))
-        if r.status_code != requests.codes.ok:
-            raise ValueError('Unable to query server API version: {}'.format(r.text))
+        require(r.status_code == requests.codes.ok, 'Unable to query server API version: {}'.format(r.text))
         server_version = r.json()
         server_api_version = server_version.get('api', '')
-        if server_api_version != self.api_version:
-            raise ValueError('Mismatch API version: server={}, client={}'.format(server_api_version, self.api_version))
+        require(server_api_version == self.api_version,
+                'Mismatch API version: server={}, client={}'.format(server_api_version, self.api_version))

@@ -76,7 +76,7 @@ class Pipeline(object):
 
     def __getitem__(self, item):
         try:
-            return next(s for s in self._stages if s.name == item)
+            return next(s for s in self._stages if s.get_name() == item)
         except StopIteration:
             raise KeyError('Stage not found: {!r}'.format(item))
 
@@ -88,11 +88,10 @@ class Pipeline(object):
         :return: true if the given stage belong to this pipeline
         """
         if isinstance(item, Stage):
-            item_name = item.name
-        else:
-            require(isinstance(item, six.text_type), 'Only support stage object or a string, got {!r}'.format(item))
-            item_name = item
-        return next((s for s in self._stages if s.name == item_name), None) is not None
+            return next((s for s in self._stages if s == item), None) is not None
+
+        require(isinstance(item, six.text_type), 'Only support stage object or a string, got {!r}'.format(item))
+        return next((s for s in self._stages if s.get_name() == item), None) is not None
 
     def __enter__(self):
         self._context_manager = get_pipeline_stack().get_controller(self)
@@ -103,27 +102,20 @@ class Pipeline(object):
 
     def add(self, stage):
         """
-        Add a stage into this pipeline
+        Add a stage into this pipeline. No-op if the stage is already in this pipeline.
+
+        Note: the stage must have a name before it is added into a Pipeline.
+        This function throws exception if the stage doesn't have a name, or it is given a duplicated name
+
         :type stage: Stage
         :return: the given stage
         """
-        if stage in self._stages:
-            return stage
-
-        if stage.get_name() is None:
-            # give this a name
-            name_template = '{}_{{}}'.format(stage.__class__.__name__.lower())
-            idx = 0
-            new_name = name_template.format(idx)
-            while self.__contains__(new_name):
-                idx += 1
-                new_name = name_template.format(idx)
-            stage.set_name(new_name)
-        else:
-            if next((s for s in self._stages if s.get_name() == stage.get_name()), None) is not None:
-                raise ValueError('Duplicated stage name: {}'.format(stage.get_name()))
-
-        self._stages.append(stage)
+        if stage not in self._stages:
+            stage_name = stage.get_name()
+            require(stage_name is not None, 'Please give the stage a name before adding it into the pipeline')
+            require(next((s for s in self._stages if s.get_name() == stage_name), None) is None,
+                    'Duplicated stage name: {}'.format(stage.get_name()))
+            self._stages.append(stage)
         return stage
 
     @classmethod
@@ -134,8 +126,27 @@ class Pipeline(object):
         :param js_data: a dict with ``id`` and ``stages``
         :rtype: Pipeline
         """
-        # TODO: decide what to do here
-        return Pipeline(js_data['id'], None)
+        stages = [Stage.from_json(js) for js in js_data['stages']]
+
+        def _get_stage(stage_name):
+            """
+            :rtype: Stage
+            """
+            return next(s for s in stages if s.get_name() == stage_name)
+
+        # dirty: scan the stages again and fill-in the SlotDescriptors
+        for js_stage in js_data['stages']:
+            this_stage = _get_stage(js_stage['name'])
+            for k, v in js_stage['inputs'].items():
+
+                if v[0] == MessageType.STAGE_OUTPUT_DEF:
+                    # ['StageOutputDef', {'stageName': 'name-of-the-stage', 'outputName': 'outputVal'}]
+                    parent_stage = _get_stage(v[1]['stageName'])
+                    slot_desc = parent_stage.slot_descriptor(v[1]['outputName'])
+
+                    this_stage._set_input(this_stage.slot_descriptor(k), slot_desc)
+
+        return Pipeline(js_data['id'], stages=stages)
 
     def to_json(self):
         """

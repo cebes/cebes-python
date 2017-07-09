@@ -29,7 +29,7 @@ def param(name='param', param_type=None, server_name=None):
 
     :param name: Name of the parameter (i.e. slot) 
     :param param_type: optionally, a string represent the type of this param (on the server)
-    mostly used to disambiguous primitive types on server
+        mostly used to disambiguous primitive types on server
     :type param_type: str
     :param server_name: name of this parameter on server, if different from 'name'
     :return: 

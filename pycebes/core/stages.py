@@ -129,6 +129,9 @@ class MessageType(object):
             return get_default_session().model.get(msg_content['modelId'])
         if msg_type == MessageType.COLUMN_DEF:
             raise NotImplementedError('{}'.format(js_data))
+        if msg_type == MessageType.STAGE_OUTPUT_DEF:
+            # we don't have enough information to return a SlotDescriptor here
+            return None
 
         raise NotImplementedError('{}'.format(js_data))
 
@@ -172,8 +175,7 @@ class SlotDescriptor(object):
         self.is_input = is_input
 
     def __repr__(self):
-        return '{}(parent-name={!r},name={!r},is_input={!r})'.format(
-            self.__class__.__name__, self.parent_name, self.name, self.is_input)
+        return '{}(name={!r},is_input={!r})'.format(self.__class__.__name__, self.name, self.is_input)
 
     @property
     def parent_name(self):
@@ -270,7 +272,7 @@ def input_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc='
     :param name: name of the slot
     :param message_type: type of the message used to transport the slot value
     :param server_name: optionally, the name of this input on the server. If not specified,
-    it is the same with ``name``.
+        it is the same with ``name``.
     :param doc: Brief documentation explaining the slot
     """
     return _add_slot(name=name, message_type=message_type,
@@ -284,7 +286,7 @@ def output_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc=
     :param name: name of the slot
     :param message_type: type of the message used to transport the slot value
     :param server_name: optionally, the name of this input on the server. If not specified,
-    it is the same with ``name``.
+        it is the same with ``name``.
     :param doc: Brief documentation explaining the slot
     """
     return _add_slot(name=name, message_type=message_type, server_name=server_name, doc=doc, is_input=False)
@@ -299,19 +301,60 @@ def output_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc=
 class Stage(object):
     SLOTS = {}
 
-    def __init__(self):
+    def __init__(self, name='stage', **kwargs):
+        """
+        Initialize the stage
+
+        :param name: name given to this stage
+        :param kwargs: values assigned to the input slots
+        """
         self._slot_values = {}
 
         # Name is special. We need this to avoid infinite recursion when looking up other slots
+        require(name is not None, 'Stage name should not be None at creation time')
         self._name = SlotDescriptor(self, 'name', True)
+        self._set_input(self.name, name)
+
+        for k, v in kwargs.items():
+            self._set_input(self.slot_descriptor(k), v)
 
     def __repr__(self):
-        slot_desc = ','.join('{}={!r}'.format(s.name, self.get_input(getattr(self, s.name)))
+        slot_desc = ','.join('{}={!r}'.format(s.name, self.get_input(self.slot_descriptor(s.name)))
                              for s in _get_slots(self.__class__, True))
         return '{}({})'.format(self.__class__.__name__, slot_desc)
 
     def __dir__(self):
         return dir(type(self)) + [p.name for p in _get_slots(self.__class__, True) + _get_slots(self.__class__, False)]
+
+    def _set_input(self, slot_desc, value):
+        """
+        Set the value of the given slot descriptor
+
+        This is a private function for a reason: users are not supposed to change the input slots
+        of a stage, once it is already created. The only way to update the slots is to use
+        the `feeds` argument in the call to Pipeline.run().
+
+        :param slot_desc: The slot descriptor to set the value to
+        :type slot_desc: SlotDescriptor
+        :param value:
+        :return: this instance
+        """
+        require(isinstance(slot_desc, SlotDescriptor) and slot_desc.parent is self and slot_desc.is_input,
+                'Not a slot descriptor or it does not belong to this instance: {}'.format(slot_desc.name))
+        if isinstance(value, SlotDescriptor):
+            # output slot of another stage
+            require((not value.is_input) and value.message_type.msg_type == slot_desc.message_type.msg_type,
+                    'Slot {!r} is not an output or of incompatible type for input slot {}'.format(
+                        value, slot_desc.name))
+        else:
+            require(slot_desc.message_type.is_valid(value),
+                    'Invalid type of value {!r} for slot {}'.format(value, slot_desc.name))
+        self._slot_values[slot_desc.name] = value
+        return self
+
+    """
+    Public APIs
+    """
 
     def slot(self, slot_name='', is_input=True):
         """
@@ -322,53 +365,33 @@ class Stage(object):
         require(s is not None, 'Slot name {} not found in class {}'.format(slot_name, self.__class__.__name__))
         return s
 
-    def set_inputs(self, **kwargs):
+    def slot_descriptor(self, slot_name=''):
         """
-        Set values to the input slots of this stage.
-        Iteratively call ``self.set_input()`` on the kwargs arguments
+        Return the SlotDescriptor with the given name
 
-        :param kwargs: list of ``<slot-name>=value`` entries
-        :return: this stage
-        """
-        for k, v in kwargs.items():
-            self.set_input(getattr(self, k), v)
-        return self
+        Different from :func:`slot`, this function return a SlotDescriptor, which is
+        a "pointer" representation of the slot, and attaches to a particular Stage object.
+        This also works if user provides slot_name as the server_name of the slot
 
-    def set_name(self, new_name):
-        """
-        Set the name of this stage. Shortcut for ``self.set_input(self.name, new_name)``
+        The _Slot object returned by :func:`slot` is the representation of the slot, attaches to each Stage class
 
-        :param new_name: Name of the stage
-        :type new_name: six.string
+        :rtype: SlotDescriptor
         """
-        return self.set_input(self.name, new_name)
+        slot_desc = getattr(self, slot_name, None)
+        if slot_desc is not None and isinstance(slot_desc, SlotDescriptor):
+            return slot_desc
+
+        # users might be providing the server name. Look it up!
+        for c in dir(self):
+            p = getattr(self, c)
+            if isinstance(p, SlotDescriptor) and self.slot(c, is_input=p.is_input).server_name == slot_name:
+                return p
+        raise ValueError('Slot descriptor {} not found in class {}'.format(slot_name, self.__class__.__name__))
 
     def get_name(self):
         """Returns the name of this stage, shortcut for ``self.get_input(self.name)``
         """
         return self.get_input(self.name)
-
-    def set_input(self, slot_desc, value):
-        """
-        Set the value of the given slot descriptor
-
-        :param slot_desc: The slot descriptor to set the value to
-        :type slot_desc: SlotDescriptor
-        :param value:
-        :return: this instance
-        """
-        require(isinstance(slot_desc, SlotDescriptor) and slot_desc.parent is self and slot_desc.is_input,
-                'Not a slot descriptor or it does not belong to this instance: {!r}'.format(slot_desc))
-        if isinstance(value, SlotDescriptor):
-            # output slot of another stage
-            require((not value.is_input) and value.message_type.msg_type == slot_desc.message_type.msg_type,
-                    'Slot {!r} is not an output or of incompatible type for input slot {!r}'.format(
-                        value, slot_desc))
-        else:
-            require(slot_desc.message_type.is_valid(value),
-                    'Invalid type of value {!r} for slot {}'.format(value, slot_desc.full_name))
-        self._slot_values[slot_desc.name] = value
-        return self
 
     def get_input(self, slot_desc, default=None):
         """
@@ -379,8 +402,8 @@ class Stage(object):
         :param default: default value to  return if the given slot is not specified
         :return: the value
         """
-        if not isinstance(slot_desc, SlotDescriptor) or slot_desc.parent is not self or (not slot_desc.is_input):
-            raise ValueError('Not a slot descriptor or it does not belong to this instance: {}'.format(slot_desc))
+        require(isinstance(slot_desc, SlotDescriptor) and (slot_desc.parent is self) and slot_desc.is_input,
+                'Not a slot descriptor or it does not belong to this instance: {}'.format(slot_desc))
         return self._slot_values.get(slot_desc.name, default)
 
     def to_json(self):
@@ -391,7 +414,7 @@ class Stage(object):
         for s in _get_slots(self.__class__, True):
             if s.name != 'name':
                 # skip the name slot
-                slot_desc = getattr(self, s.name)
+                slot_desc = self.slot_descriptor(s.name)
                 v = self.get_input(slot_desc)
                 if v is not None:
                     inputs[s.server_name] = s.message_type.to_json(v)
@@ -400,6 +423,41 @@ class Stage(object):
                 'stageClass': self.__class__.__name__,
                 'inputs': inputs,
                 'outputs': {}}
+
+    @staticmethod
+    def _find_subclass(cls, name):
+        """Find subclass of cls that has the given name, recursively.
+        Return None if cannot find any class for this name
+
+        :type cls: Type
+        """
+        if cls.__name__ == name:
+            return cls
+
+        for c in cls.__subclasses__():
+            cc = Stage._find_subclass(c, name)
+            if cc is not None:
+                return cc
+        return None
+
+    @classmethod
+    def from_json(cls, js_data):
+        """
+        Return a Stage from its JSON representation
+
+        :param js_data: JSON data (received from server)
+        :rtype: Stage
+        """
+        stage_class = js_data['stageClass']
+        clazz = Stage._find_subclass(cls, stage_class)
+        require(clazz is not None, 'Could not find any Stage class named {}'.format(stage_class))
+
+        name = js_data['name']
+        inputs = {}
+        for k, v in js_data['inputs'].items():
+            inputs[k] = MessageType.from_json(v)
+
+        return clazz(name=name, **inputs)
 
 
 @input_slot('input_df', MessageTypes.DATAFRAME, 'inputDf')
@@ -454,13 +512,13 @@ class Placeholder(Stage):
 @output_slot('output_val', MessageTypes.VALUE, server_name='outputVal')
 class ValuePlaceholder(Placeholder):
 
-    def __init__(self, value_type=None):
-        super(ValuePlaceholder, self).__init__()
-
+    def __init__(self, name='Stage', value_type=None):
         # overwrite the actual input slot and output slot, to incorporate custom `value_type`
         msg_type = MessageTypes.VALUE if value_type is None else MessageTypes.value(value_type=value_type)
         self._input_val_slot = _Slot('input_val', msg_type, True, 'inputVal')
         self._output_val_slot = _Slot('output_val', msg_type, False, 'outputVal')
+
+        super(ValuePlaceholder, self).__init__(name=name)
 
     def slot(self, slot_name='', is_input=True):
         # override this function to return the custom slots created in the constructor

@@ -60,7 +60,7 @@ class Session(object):
     @property
     def dataframe(self):
         """
-        Return a helper for working with tagged and cached ``Dataframe``s
+        Return a helper for working with tagged and cached :class:`Dataframe`
 
         :rtype: _TagHelper
         """
@@ -70,7 +70,7 @@ class Session(object):
     @property
     def model(self):
         """
-        Return a helper for working with tagged and cached ``Model``s
+        Return a helper for working with tagged and cached :class:`Model`
 
         :rtype: _TagHelper
         """
@@ -80,7 +80,7 @@ class Session(object):
     @property
     def pipeline(self):
         """
-        Return a helper for working with tagged and cached ``Pipeline``s
+        Return a helper for working with tagged and cached :class:`Pipeline`
 
         :rtype: _TagHelper
         """
@@ -125,16 +125,34 @@ class Session(object):
         """
         return Dataframe.from_json(self._client.post_and_wait('storage/read', data=request))
 
-    def from_s3(self):
-        pass
+    @staticmethod
+    def _verify_data_format(fmt='csv', options=None):
+        """
+        Helper to verify the data format and options
+        Return the JSON representation of the given options
 
-    def from_csv(self):
-        pass
+        :type options: ReadOptions
+        """
+        valid_fmts = ['csv', 'json', 'parquet', 'orc', 'text']
+        fmt = fmt.lower()
+        require(fmt in valid_fmts, 'Unrecognized data format: {}. '
+                                   'Supported values are: {}'.format(fmt, ', '.join(valid_fmts)))
+        if options is not None:
+            if fmt == valid_fmts[0]:
+                require(isinstance(options, CsvReadOptions),
+                        'options must be a {} object. Got {!r}'.format(CsvReadOptions.__name__, options))
+            elif fmt == valid_fmts[1]:
+                require(isinstance(options, JsonReadOptions),
+                        'options must be a {} object. Got {!r}'.format(JsonReadOptions.__name__, options))
+            elif fmt == valid_fmts[2]:
+                require(isinstance(options, ParquetReadOptions),
+                        'options must be a {} object. Got {!r}'.format(ParquetReadOptions.__name__, options))
+            else:
+                raise ValueError('options must be None when fmt={}'.format(fmt))
+            return options.to_json()
+        return {}
 
-    def from_hdfs(self):
-        pass
-
-    def from_jdbc(self, url, table_name, user_name='', password=''):
+    def read_jdbc(self, url, table_name, user_name='', password=''):
         """
         Read a Dataframe from a JDBC table
 
@@ -143,21 +161,74 @@ class Session(object):
         :param user_name: JDBC user name
         :param password: JDBC password
 
-        :rtype: Dataframe 
+        :rtype: Dataframe
         """
-        return self._read({
-            'jdbc': {'url': url, 'tableName': table_name,
-                     'userName': user_name,
-                     'passwordBase64': base64.urlsafe_b64encode(password)}})
+        return self._read({'jdbc': {'url': url, 'tableName': table_name,
+                                    'userName': user_name,
+                                    'passwordBase64': base64.urlsafe_b64encode(password)}})
 
-    def from_hive(self, table_name=''):
+    def read_hive(self, table_name=''):
         """
         Read a Dataframe from Hive table of the given name
 
         :param table_name: name of the Hive table to read data from
-        :rtype: Dataframe 
+        :rtype: Dataframe
         """
         return self._read({'hive': {'tableName': table_name}})
+
+    def read_s3(self, fmt='csv', options=None):
+        pass
+
+    def read_hdfs(self, fmt='csv', options=None):
+        pass
+
+    def read_local(self, path, fmt='csv', options=None):
+        """
+        Upload a file from the local machine to the server, and create a :class:`Dataframe` out of it.
+
+        :param path: path to the local file
+        :param fmt: format of the file, can be `csv`, `json`, `orc`, `parquet`, `text`
+        :param options: Additional options that dictate how the files are going to be read.
+            If specified, this can be:
+
+            - :class:`CsvReadOptions` when `fmt='csv'`,
+            - :class:`JsonReadOptions` when `fmt='json'`, or
+            - :class:`ParquetReadOptions` when `fmt='parquet'`
+
+         Other formats do not need additional options
+        :rtype: Dataframe
+        """
+        options_dict = Session._verify_data_format(fmt=fmt, options=options)
+        server_path = self._client.upload(path)['path']
+        return self._read({'localFs': {'path': server_path, 'format': fmt}, 'readOptions': options_dict})
+
+    def read_csv(self, path, options=None):
+        """
+        Upload a local CSV file to the server, and create a Dataframe out of it.
+
+        :param path: path to the local CSV file
+        :param options: Additional options that dictate how the files are going to be read.
+            Must be either None or a :class:`CsvReadOptions` object
+        :type options: CsvReadOptions
+        :rtype: Dataframe
+        """
+        return self.read_local(path=path, fmt='csv', options=options)
+
+    def read_json(self, path, options=None):
+        """
+        Upload a local JSON file to the server, and create a Dataframe out of it.
+
+        :param path: path to the local JSON file
+        :param options: Additional options that dictate how the files are going to be read.
+            Must be either None or a :class:`JsonReadOptions` object
+        :type options: JsonReadOptions
+        :rtype: Dataframe
+        """
+        return self.read_local(path=path, fmt='json', options=options)
+
+########################################################################
+
+########################################################################
 
 
 class _TagHelper(object):
@@ -230,3 +301,158 @@ class _TagHelper(object):
         if pattern is not None:
             data['pattern'] = pattern
         return self._response_class(self._client.post_and_wait('{}/tags'.format(self._cmd_prefix), data))
+
+
+########################################################################
+
+########################################################################
+
+class ReadOptions(object):
+    PERMISSIVE = 'PERMISSIVE'
+    DROPMALFORMED = 'DROPMALFORMED'
+    FAILFAST = 'FAILFAST'
+
+    """
+    Contain options for read commands
+    """
+
+    def __init__(self, **kwargs):
+        self.options = kwargs
+
+    def to_json(self):
+        """
+        Convert into a dict of options, with keys suitable for the server
+        Concretely, this function will convert the keys from snake_convention to camelConvention
+        """
+        d = {}
+        for k, v in self.options.items():
+            # skip values that are None
+            if v is None:
+                continue
+
+            # convert the key from snake_convention to camelConvention (for server)
+            k_str = ''
+            i = 0
+            while i < len(k):
+                if k[i] == '_' and i < len(k) - 1:
+                    k_str += k[i + 1].upper()
+                    i += 2
+                else:
+                    k_str += k[i]
+                    i += 1
+
+            # convert the value into its string representation
+            if isinstance(v, bool):
+                v_str = 'true' if v else 'false'
+            else:
+                v_str = '{}'.format(v)
+
+            d[k_str] = v_str
+        return d
+
+
+class CsvReadOptions(ReadOptions):
+    def __init__(self, sep=',', encoding='UTF-8', quote='"', escape='\\', comment=None, header=False,
+                 infer_schema=False, ignore_leading_white_space=False, null_value=None, nan_value='NaN',
+                 positive_inf='Inf', negative_inf='-Inf', date_format='yyyy-MM-dd',
+                 timestamp_format='yyyy-MM-dd\'T\'HH:mm:ss.SSSZZ', max_columns=20480,
+                 max_chars_per_column=-1, max_malformed_log_per_partition=10, mode=ReadOptions.PERMISSIVE):
+        """
+        :param sep: sets the single character as a separator for each field and value.
+        :param encoding: decodes the CSV files by the given encoding type
+        :param quote: sets the single character used for escaping quoted values where
+            the separator can be part of the value. If you would like to turn off quotations, you need to
+            set not `null` but an empty string.
+        :param escape: sets the single character used for escaping quotes inside an already quoted value.
+        :param comment: sets the single character used for skipping lines beginning with this character.
+            By default, it is disabled
+        :param header: uses the first line as names of columns.
+        :param infer_schema: infers the input schema automatically from data. It requires one extra pass over the data.
+        :param ignore_leading_white_space: defines whether or not leading whitespaces
+            from values being read should be skipped.
+        :param null_value: sets the string representation of a null value.
+            This applies to all supported types including the string type.
+        :param nan_value: sets the string representation of a "non-number" value
+        :param positive_inf: sets the string representation of a positive infinity value
+        :param negative_inf: sets the string representation of a negative infinity value
+        :param date_format: sets the string that indicates a date format.
+            Custom date formats follow the formats at `java.text.SimpleDateFormat`.
+            This applies to date type.
+        :param timestamp_format: sets the string that indicates a timestamp format.
+            Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type.
+        :param max_columns: defines a hard limit of how many columns a record can have
+        :param max_chars_per_column: defines the maximum number of characters allowed
+            for any given value being read. By default, it is -1 meaning unlimited length
+        :param max_malformed_log_per_partition: sets the maximum number of malformed rows
+            will be logged for each partition. Malformed records beyond this number will be ignored.
+        :param mode: allows a mode for dealing with corrupt records during parsing.
+
+            - :ref:`ReadOptions.PERMISSIVE`: sets other fields to `null` when it meets a corrupted record.
+                    When a schema is set by user, it sets `null` for extra fields
+            - :ref:`ReadOptions.DROPMALFORMED`: ignores the whole corrupted records
+            - :ref:`ReadOptions.FAILFAST`: throws an exception when it meets corrupted records
+
+        """
+        super(CsvReadOptions, self).__init__(sep=sep, encoding=encoding, quote=quote,
+                                             escape=escape, comment=comment, header=header,
+                                             infer_schema=infer_schema,
+                                             ignore_leading_white_space=ignore_leading_white_space,
+                                             null_value=null_value, nan_value=nan_value,
+                                             positive_inf=positive_inf, negative_inf=negative_inf,
+                                             date_format=date_format, timestamp_format=timestamp_format,
+                                             max_columns=max_columns, max_chars_per_column=max_chars_per_column,
+                                             max_malformed_log_per_partition=max_malformed_log_per_partition,
+                                             mode=mode)
+
+
+class JsonReadOptions(ReadOptions):
+    def __init__(self, primitives_as_string=False, prefers_decimal=False, allow_comments=False,
+                 allow_unquoted_field_names=False, allow_single_quotes=True, allow_numeric_leading_zeros=False,
+                 allow_backslash_escaping_any_character=False, mode=ReadOptions.PERMISSIVE,
+                 column_name_of_corrupt_record=None, date_format='yyyy-MM-dd',
+                 timestamp_format="yyyy-MM-dd'T'HH:mm:ss.SSSZZ"):
+        """
+        Options for reading Json files
+
+        :param primitives_as_string: infers all primitive values as a string type
+        :param prefers_decimal: infers all floating-point values as a decimal type.
+            If the values do not fit in decimal, then it infers them as doubles
+        :param allow_comments: ignores Java/C++ style comment in JSON records
+        :param allow_unquoted_field_names: allows unquoted JSON field names
+        :param allow_single_quotes: allows single quotes in addition to double quotes
+        :param allow_numeric_leading_zeros: allows leading zeros in numbers (e.g. 00012)
+        :param allow_backslash_escaping_any_character: allows accepting quoting of all
+            character using backslash quoting mechanism
+        :param mode: allows a mode for dealing with corrupt records during parsing.
+
+            - :ref:`ReadOptions.PERMISSIVE`: sets other fields to `null` when it meets a corrupted record.
+                    When a schema is set by user, it sets `null` for extra fields
+            - :ref:`ReadOptions.DROPMALFORMED`: ignores the whole corrupted records
+            - :ref:`ReadOptions.FAILFAST`: throws an exception when it meets corrupted records
+
+        :param column_name_of_corrupt_record: allows renaming the new field having malformed string
+            created by :ref:`ReadOptions.PERMISSIVE` mode. This overrides `spark.sql.columnNameOfCorruptRecord`.
+        :param date_format: sets the string that indicates a date format.
+            Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to date type
+        :param timestamp_format: sets the string that indicates a timestamp format.
+            Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type
+        """
+        super(JsonReadOptions,
+              self).__init__(primitives_as_string=primitives_as_string,
+                             prefers_decimal=prefers_decimal, allow_comments=allow_comments,
+                             allow_unquoted_field_names=allow_unquoted_field_names,
+                             allow_single_quotes=allow_single_quotes,
+                             allow_numeric_leading_zeros=allow_numeric_leading_zeros,
+                             allow_backslash_escaping_any_character=allow_backslash_escaping_any_character,
+                             mode=mode, column_name_of_corrupt_record=column_name_of_corrupt_record,
+                             date_format=date_format, timestamp_format=timestamp_format)
+
+
+class ParquetReadOptions(ReadOptions):
+    def __init__(self, merge_schema=True):
+        """
+        Options for reading Parquet files
+
+        :param merge_schema: sets whether we should merge schemas collected from all Parquet part-files.
+        """
+        super(ParquetReadOptions, self).__init__(merge_schema=merge_schema)

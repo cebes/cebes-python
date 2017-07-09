@@ -36,10 +36,34 @@ pycebes\.core\.exceptions module
     :undoc-members:
     :show-inheritance:
 
+pycebes\.core\.expressions module
+---------------------------------
+
+.. automodule:: pycebes.core.expressions
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pycebes\.core\.functions module
 -------------------------------
 
 .. automodule:: pycebes.core.functions
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pycebes\.core\.pipeline module
+------------------------------
+
+.. automodule:: pycebes.core.pipeline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pycebes\.core\.pipeline\_api module
+-----------------------------------
+
+.. automodule:: pycebes.core.pipeline_api
     :members:
     :undoc-members:
     :show-inheritance:
@@ -64,6 +88,14 @@ pycebes\.core\.session module
 -----------------------------
 
 .. automodule:: pycebes.core.session
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pycebes\.core\.stages module
+----------------------------
+
+.. automodule:: pycebes.core.stages
     :members:
     :undoc-members:
     :show-inheritance:

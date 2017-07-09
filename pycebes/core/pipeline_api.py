@@ -20,14 +20,21 @@ from pycebes.internal.helpers import require
 from pycebes.internal.implicits import get_default_pipeline
 
 
-def _create_stage(stage, stage_name=None, **kwargs):
+def _create_stage(stage_cls, stage_name=None, **kwargs):
     """
     Internal helper for creating a stage and add it into the current default pipeline
     """
-    if stage_name is not None:
-        stage.set_name(stage_name)
-
     ppl = get_default_pipeline()
+
+    # invent a name for this stage
+    if stage_name is None:
+        name_template = '{}_{{}}'.format(stage_cls.__name__.lower())
+        idx = 0
+        stage_name = name_template.format(idx)
+        while ppl.__contains__(stage_name):
+            idx += 1
+            stage_name = name_template.format(idx)
+
     inputs = {}
     for k, v in kwargs.items():
         if isinstance(v, stages.Placeholder):
@@ -38,7 +45,7 @@ def _create_stage(stage, stage_name=None, **kwargs):
             ppl.add(v.parent)
         inputs[k] = v
 
-    return ppl.add(stage.set_inputs(**inputs))
+    return ppl.add(stage_cls(name=stage_name, **inputs))
 
 
 class PlaceholderTypes(enum.Enum):
@@ -55,11 +62,13 @@ def placeholder(placeholder_type=PlaceholderTypes.DATAFRAME, value_type=None, na
     :param name:
     :return:
     """
-    placeholders = {PlaceholderTypes.VALUE: stages.ValuePlaceholder(value_type=value_type),
-                    PlaceholderTypes.DATAFRAME: stages.DataframePlaceholder(),
-                    PlaceholderTypes.COLUMN: stages.ColumnPlaceholder()}
-    require(placeholder_type in placeholders, 'Invalid placeholder type: {}'.format(placeholder_type))
-    return _create_stage(placeholders[placeholder_type], name)
+    if placeholder_type == PlaceholderTypes.VALUE:
+        return _create_stage(stages.ValuePlaceholder, name, value_type=value_type)
+    else:
+        placeholders = {PlaceholderTypes.DATAFRAME: stages.DataframePlaceholder,
+                        PlaceholderTypes.COLUMN: stages.ColumnPlaceholder}
+        require(placeholder_type in placeholders, 'Invalid placeholder type: {}'.format(placeholder_type))
+        return _create_stage(placeholders[placeholder_type], name)
 
 
 """
@@ -76,7 +85,7 @@ def drop(df, col_names, name=None):
     :return:
     :rtype: stages.Drop
     """
-    return _create_stage(stages.Drop(), name, input_df=df, col_names=col_names)
+    return _create_stage(stages.Drop, name, input_df=df, col_names=col_names)
 
 
 """
@@ -94,7 +103,7 @@ def index_to_string(df, input_col, output_col, name=None):
     :return:
     :rtype: stages.IndexToString
     """
-    return _create_stage(stages.IndexToString(), name, input_df=df, input_col=input_col, output_col=output_col)
+    return _create_stage(stages.IndexToString, name, input_df=df, input_col=input_col, output_col=output_col)
 
 
 def string_indexer(df, input_col, output_col, name=None):
@@ -107,7 +116,7 @@ def string_indexer(df, input_col, output_col, name=None):
     :return:
     :rtype: stages.StringIndexer
     """
-    return _create_stage(stages.StringIndexer(), name, input_df=df, input_col=input_col, output_col=output_col)
+    return _create_stage(stages.StringIndexer, name, input_df=df, input_col=input_col, output_col=output_col)
 
 
 def vector_assembler(df, input_cols, output_col='output', name=None):
@@ -120,7 +129,7 @@ def vector_assembler(df, input_cols, output_col='output', name=None):
     :return:
     :rtype: stages.VectorAssembler
     """
-    return _create_stage(stages.VectorAssembler(), name, input_df=df, input_cols=input_cols, output_col=output_col)
+    return _create_stage(stages.VectorAssembler, name, input_df=df, input_cols=input_cols, output_col=output_col)
 
 
 """
@@ -151,7 +160,7 @@ def linear_regression(df, features_col, label_col, prediction_col='prediction',
     :return:
     :rtype: stages.LinearRegression
     """
-    return _create_stage(stages.LinearRegression(), name, input_df=df,
+    return _create_stage(stages.LinearRegression, name, input_df=df,
                          features_col=features_col, label_col=label_col, prediction_col=prediction_col,
                          aggregation_depth=aggregation_depth, elastic_net_param=elastic_net_param,
                          fit_intercept=fit_intercept, max_iter=max_iter, reg_param=reg_param,

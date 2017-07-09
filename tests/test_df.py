@@ -49,11 +49,19 @@ class TestDataframe(test_base.TestBase):
         col_name = df.columns[0]
         self.assertIsInstance(getattr(df, col_name), Column)
 
+        # failed getattr
+        with self.assertRaises(AttributeError):
+            getattr(df, 'non_existed_column')
+
         # getitem works
         self.assertIsInstance(df[col_name], Column)
 
+        # failed getitem
+        with self.assertRaises(KeyError):
+            _ = df['non_existed_column']
+
     def test_get_tags(self):
-        tags = self.session.dataframes(max_count=10)
+        tags = self.session.dataframe.list(max_count=10)
         self.assertIsInstance(tags, TaggedDataframeResponse)
 
     def test_take(self):

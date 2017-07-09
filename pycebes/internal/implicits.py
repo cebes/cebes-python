@@ -29,6 +29,8 @@ def _get_default(stack, error_msg='No default object found'):
 def get_default_session():
     """
     Get the current default session, raise Exception if there is no Session created
+
+    :rtype: pycebes.core.session.Session
     """
     return _get_default(_default_session_stack, 'No default session found. You need to create a Session')
 
@@ -45,6 +47,8 @@ def get_session_stack():
 def get_default_pipeline():
     """
     Get the current pipeline, raise Exception if there is no Pipeline created
+
+    :rtype: pycebes.core.pipeline.Pipeline
     """
     return _get_default(_default_pipeline_stack, 'No pipeline found. You need to create a Pipeline')
 
