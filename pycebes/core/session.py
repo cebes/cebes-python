@@ -60,7 +60,7 @@ class Session(object):
     @property
     def dataframe(self):
         """
-        Return a helper for working with tagged and cached ``Dataframe``s
+        Return a helper for working with tagged and cached :class:`Dataframe`
 
         :rtype: _TagHelper
         """
@@ -70,7 +70,7 @@ class Session(object):
     @property
     def model(self):
         """
-        Return a helper for working with tagged and cached ``Model``s
+        Return a helper for working with tagged and cached :class:`Model`
 
         :rtype: _TagHelper
         """
@@ -80,7 +80,7 @@ class Session(object):
     @property
     def pipeline(self):
         """
-        Return a helper for working with tagged and cached ``Pipeline``s
+        Return a helper for working with tagged and cached :class:`Pipeline`
 
         :rtype: _TagHelper
         """
@@ -184,16 +184,16 @@ class Session(object):
 
     def read_local(self, path, fmt='csv', options=None):
         """
-        Upload a file from the local machine to the server, and create a :ref:`Dataframe` out of it.
+        Upload a file from the local machine to the server, and create a :class:`Dataframe` out of it.
 
         :param path: path to the local file
         :param fmt: format of the file, can be `csv`, `json`, `orc`, `parquet`, `text`
         :param options: Additional options that dictate how the files are going to be read.
             If specified, this can be:
 
-            - :ref:`CsvReadOptions` when `fmt='csv'`,
-            - :ref:`JsonReadOptions` when `fmt='json'`, or
-            - :ref:`ParquetReadOptions` when `fmt='parquet'`
+            - :class:`CsvReadOptions` when `fmt='csv'`,
+            - :class:`JsonReadOptions` when `fmt='json'`, or
+            - :class:`ParquetReadOptions` when `fmt='parquet'`
 
          Other formats do not need additional options
         :rtype: Dataframe
@@ -208,7 +208,7 @@ class Session(object):
 
         :param path: path to the local CSV file
         :param options: Additional options that dictate how the files are going to be read.
-        Must be either None or a :ref:`CsvReadOptions` object
+            Must be either None or a :class:`CsvReadOptions` object
         :type options: CsvReadOptions
         :rtype: Dataframe
         """
@@ -220,7 +220,7 @@ class Session(object):
 
         :param path: path to the local JSON file
         :param options: Additional options that dictate how the files are going to be read.
-        Must be either None or a :ref:`JsonReadOptions` object
+            Must be either None or a :class:`JsonReadOptions` object
         :type options: JsonReadOptions
         :rtype: Dataframe
         """
@@ -361,34 +361,34 @@ class CsvReadOptions(ReadOptions):
         :param sep: sets the single character as a separator for each field and value.
         :param encoding: decodes the CSV files by the given encoding type
         :param quote: sets the single character used for escaping quoted values where
-         the separator can be part of the value. If you would like to turn off quotations, you need to
-          set not `null` but an empty string.
+            the separator can be part of the value. If you would like to turn off quotations, you need to
+            set not `null` but an empty string.
         :param escape: sets the single character used for escaping quotes inside an already quoted value.
         :param comment: sets the single character used for skipping lines beginning with this character.
-        By default, it is disabled
+            By default, it is disabled
         :param header: uses the first line as names of columns.
         :param infer_schema: infers the input schema automatically from data. It requires one extra pass over the data.
         :param ignore_leading_white_space: defines whether or not leading whitespaces
-         from values being read should be skipped.
+            from values being read should be skipped.
         :param null_value: sets the string representation of a null value.
-        This applies to all supported types including the string type.
+            This applies to all supported types including the string type.
         :param nan_value: sets the string representation of a "non-number" value
         :param positive_inf: sets the string representation of a positive infinity value
         :param negative_inf: sets the string representation of a negative infinity value
         :param date_format: sets the string that indicates a date format.
-         Custom date formats follow the formats at `java.text.SimpleDateFormat`.
-         This applies to date type.
+            Custom date formats follow the formats at `java.text.SimpleDateFormat`.
+            This applies to date type.
         :param timestamp_format: sets the string that indicates a timestamp format.
-        Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type.
+            Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type.
         :param max_columns: defines a hard limit of how many columns a record can have
         :param max_chars_per_column: defines the maximum number of characters allowed
-         for any given value being read. By default, it is -1 meaning unlimited length
+            for any given value being read. By default, it is -1 meaning unlimited length
         :param max_malformed_log_per_partition: sets the maximum number of malformed rows
-        will be logged for each partition. Malformed records beyond this number will be ignored.
+            will be logged for each partition. Malformed records beyond this number will be ignored.
         :param mode: allows a mode for dealing with corrupt records during parsing.
 
-            - :ref:`ReadOptions.PERMISSIVE`: sets other fields to `null` when it meets a corrupted record. When
-            a schema is set by user, it sets `null` for extra fields
+            - :ref:`ReadOptions.PERMISSIVE`: sets other fields to `null` when it meets a corrupted record.
+                    When a schema is set by user, it sets `null` for extra fields
             - :ref:`ReadOptions.DROPMALFORMED`: ignores the whole corrupted records
             - :ref:`ReadOptions.FAILFAST`: throws an exception when it meets corrupted records
 
@@ -408,35 +408,34 @@ class CsvReadOptions(ReadOptions):
 class JsonReadOptions(ReadOptions):
     def __init__(self, primitives_as_string=False, prefers_decimal=False, allow_comments=False,
                  allow_unquoted_field_names=False, allow_single_quotes=True, allow_numeric_leading_zeros=False,
-                 allow_backslash_escaping_any_character=False, mode='',
+                 allow_backslash_escaping_any_character=False, mode=ReadOptions.PERMISSIVE,
                  column_name_of_corrupt_record=None, date_format='yyyy-MM-dd',
                  timestamp_format="yyyy-MM-dd'T'HH:mm:ss.SSSZZ"):
         """
         Options for reading Json files
 
         :param primitives_as_string: infers all primitive values as a string type
-        :param prefers_decimal: infers all floating-point values as a decimal
-         type. If the values do not fit in decimal, then it infers them as doubles
+        :param prefers_decimal: infers all floating-point values as a decimal type.
+            If the values do not fit in decimal, then it infers them as doubles
         :param allow_comments: ignores Java/C++ style comment in JSON records
         :param allow_unquoted_field_names: allows unquoted JSON field names
         :param allow_single_quotes: allows single quotes in addition to double quotes
         :param allow_numeric_leading_zeros: allows leading zeros in numbers (e.g. 00012)
         :param allow_backslash_escaping_any_character: allows accepting quoting of all
-         character using backslash quoting mechanism
+            character using backslash quoting mechanism
         :param mode: allows a mode for dealing with corrupt records during parsing.
 
-            - :ref:`ReadOptions.PERMISSIVE`: sets other fields to `null` when it meets a corrupted record. When
-            a schema is set by user, it sets `null` for extra fields
+            - :ref:`ReadOptions.PERMISSIVE`: sets other fields to `null` when it meets a corrupted record.
+                    When a schema is set by user, it sets `null` for extra fields
             - :ref:`ReadOptions.DROPMALFORMED`: ignores the whole corrupted records
             - :ref:`ReadOptions.FAILFAST`: throws an exception when it meets corrupted records
 
         :param column_name_of_corrupt_record: allows renaming the new field having malformed string
-         created by :ref:`ReadOptions.PERMISSIVE` mode. This overrides `spark.sql.columnNameOfCorruptRecord`.
+            created by :ref:`ReadOptions.PERMISSIVE` mode. This overrides `spark.sql.columnNameOfCorruptRecord`.
         :param date_format: sets the string that indicates a date format.
-         Custom date formats follow the formats at `java.text.SimpleDateFormat`.
-         This applies to date type
+            Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to date type
         :param timestamp_format: sets the string that indicates a timestamp format.
-        Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type
+            Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type
         """
         super(JsonReadOptions,
               self).__init__(primitives_as_string=primitives_as_string,

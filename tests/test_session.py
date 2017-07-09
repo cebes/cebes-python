@@ -13,13 +13,17 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import os
 import unittest
 
 import six
 
 from pycebes.core import pipeline_api as pl
+from pycebes.core.dataframe import Dataframe
 from pycebes.core.exceptions import ServerException
 from pycebes.core.pipeline import Pipeline
+from pycebes.core.schema import StorageTypes
+from pycebes.core.session import CsvReadOptions, JsonReadOptions
 from tests import test_base
 
 
@@ -161,6 +165,28 @@ class TestSession(test_base.TestBase):
         response = self.session.model.list()
         self.assertIsNone(next((entry for entry in response.tagged_objects if entry.tag == 'tag1:latest'), None))
 
+    def test_read_local_csv(self):
+        csv_path = os.path.join(os.path.split(__file__)[0], 'data', 'cylinder_bands.csv')
+        df = self.session.read_csv(path=csv_path, options=CsvReadOptions())
+        self.assertIsInstance(df, Dataframe)
+        self.assertEqual(len(df.columns), 40)
+        self.assertTrue(all(f.storage_type == StorageTypes.STRING for f in df.schema.fields))
+
+        # with infer schema
+        df = self.session.read_csv(path=csv_path, options=CsvReadOptions(infer_schema=True))
+        self.assertIsInstance(df, Dataframe)
+        self.assertEqual(len(df.columns), 40)
+        self.assertFalse(all(f.storage_type == StorageTypes.STRING for f in df.schema.fields))
+
+    def test_read_local_json(self):
+        json_path = os.path.join(os.path.split(__file__)[0], 'data', 'cylinder_bands.json')
+        with self.assertRaises(ValueError):
+            self.session.read_json(path=json_path, options=CsvReadOptions())
+
+        df = self.session.read_json(path=json_path, options=JsonReadOptions())
+        self.assertIsInstance(df, Dataframe)
+        self.assertEqual(len(df.columns), 40)
+        self.assertFalse(all(f.storage_type == StorageTypes.STRING for f in df.schema.fields))
 
 if __name__ == '__main__':
     unittest.main()

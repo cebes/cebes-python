@@ -58,11 +58,12 @@ class Client(object):
         """
 
         def callback(encoder):
-            n = 20
-            pct = encoder.bytes_read / encoder.len
-            l = int(round(n * pct))
-            s = '\rUploading: {}{} {:.0f}%'.format('.' * l, ' ' * (max(0, n - l)), pct * 100)
-            print(s, end='')
+            if self.interactive:
+                n = 20
+                pct = encoder.bytes_read / encoder.len
+                l = int(round(n * pct))
+                s = '\rUploading: {}{} {:.0f}%'.format('.' * l, ' ' * (max(0, n - l)), pct * 100)
+                print(s, end='')
 
         with open(path, 'rb') as f:
             monitor = MultipartEncoderMonitor.from_fields(fields={'file': f}, callback=callback)
@@ -70,7 +71,8 @@ class Client(object):
 
             response = self.session.put(self._server_url('storage/upload'), data=monitor, headers=headers)
             require(response.status_code == requests.codes.ok, 'Unsuccessful request: {}'.format(response.text))
-            print('')
+            if self.interactive:
+                print('')
             return response.json()
 
     def post(self, uri, data):

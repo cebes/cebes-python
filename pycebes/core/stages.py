@@ -272,7 +272,7 @@ def input_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc='
     :param name: name of the slot
     :param message_type: type of the message used to transport the slot value
     :param server_name: optionally, the name of this input on the server. If not specified,
-    it is the same with ``name``.
+        it is the same with ``name``.
     :param doc: Brief documentation explaining the slot
     """
     return _add_slot(name=name, message_type=message_type,
@@ -286,7 +286,7 @@ def output_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc=
     :param name: name of the slot
     :param message_type: type of the message used to transport the slot value
     :param server_name: optionally, the name of this input on the server. If not specified,
-    it is the same with ``name``.
+        it is the same with ``name``.
     :param doc: Brief documentation explaining the slot
     """
     return _add_slot(name=name, message_type=message_type, server_name=server_name, doc=doc, is_input=False)
@@ -369,11 +369,11 @@ class Stage(object):
         """
         Return the SlotDescriptor with the given name
 
-        Different from :ref:`slot`, this function return a SlotDescriptor, which is
+        Different from :func:`slot`, this function return a SlotDescriptor, which is
         a "pointer" representation of the slot, and attaches to a particular Stage object.
         This also works if user provides slot_name as the server_name of the slot
 
-        The _Slot object returned by :ref:`slot` is the representation of the slot, attaches to each Stage class
+        The _Slot object returned by :func:`slot` is the representation of the slot, attaches to each Stage class
 
         :rtype: SlotDescriptor
         """
