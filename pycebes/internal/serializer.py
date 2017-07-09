@@ -48,7 +48,7 @@ def from_json(js):
     if t == 'byte_array':
         return bytearray([int(x) for x in data])
 
-    if t in ('wrapped_array', 'seq'):
+    if t in ('wrapped_array', 'seq', 'array'):
         return [from_json(x) for x in data]
 
     if t == 'map':

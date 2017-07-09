@@ -1,4 +1,5 @@
 requests
+requests-toolbelt
 six
 pandas
 tabulate

@@ -24,7 +24,6 @@ from tests import test_base
 
 
 class TestSession(test_base.TestBase):
-
     def test_tag_dataframes(self):
         df = self.cylinder_bands
 
@@ -66,7 +65,7 @@ class TestSession(test_base.TestBase):
         response = self.session.dataframe.list()
         self.assertIsNone(next((entry for entry in response.tagged_objects if entry.tag == 'tag1:latest'), None))
 
-    def test_tag_pipelines(self):
+    def test_tag_pipelines_and_models(self):
 
         with Pipeline() as ppl:
             inp = pl.placeholder(pl.PlaceholderTypes.DATAFRAME)
@@ -97,6 +96,11 @@ class TestSession(test_base.TestBase):
         # get pipeline by tag
         ppl1 = self.session.pipeline.get('tag1')
         self.assertEqual(ppl1.id, ppl.id)
+        self.assertEqual(ppl1.to_json(), ppl.to_json())
+        self.assertEqual(ppl1[inp.get_name()].get_name(), inp.get_name())
+        self.assertEqual(ppl1[assembler.get_name()].get_name(), assembler.get_name())
+        regressor = ppl1[s.get_name()]
+        self.assertEqual(regressor.get_input(regressor.prediction_col), 'caliper_predict')
 
         # get by ID
         ppl1 = self.session.pipeline.get(ppl.id)
@@ -156,6 +160,7 @@ class TestSession(test_base.TestBase):
         # list again, 'tag1' should not exist
         response = self.session.model.list()
         self.assertIsNone(next((entry for entry in response.tagged_objects if entry.tag == 'tag1:latest'), None))
+
 
 if __name__ == '__main__':
     unittest.main()
