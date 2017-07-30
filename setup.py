@@ -23,7 +23,7 @@ def __read_requirements():
 
 setup(
     name='pycebes',
-    version='0.7.0',
+    version='0.8.0.dev0',
     packages=find_packages(exclude=['tests']),
     description='Python client for Cebes HTTP server.',
     author='Vu Pham',
