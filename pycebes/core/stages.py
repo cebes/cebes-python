@@ -27,7 +27,7 @@ from pycebes.internal.implicits import get_default_session
 
 # _Slot is the internal representation of a slot, belong to the class, not the object
 # It is used to keep information about how to communicate with the server
-_Slot = namedtuple('_Slot', ('name', 'message_type', 'is_input', 'server_name'))
+_Slot = namedtuple('_Slot', ('name', 'message_type', 'is_input', 'server_name', 'is_default'))
 
 
 class MessageType(object):
@@ -228,6 +228,7 @@ class SlotDescriptor(object):
 def _get_slots(cls, is_input=True):
     """
     Get the list of slots of the given class
+
     :type cls: Type
     """
     slots = []
@@ -238,15 +239,15 @@ def _get_slots(cls, is_input=True):
     return slots
 
 
-def _add_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc='', is_input=True):
+def _add_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc='', is_input=True, is_default=False):
     def decorate(cls):
         class_name = cls.__name__
         if class_name not in cls.SLOTS:
             cls.SLOTS[class_name] = []
 
-        s = _Slot(name, message_type, is_input, name if server_name is None else server_name)
-        if next((p for p in _get_slots(cls, is_input) if p.name == s.name), None) is not None:
-            raise ValueError('Duplicated slot named {} in class {}'.format(s.name, class_name))
+        s = _Slot(name, message_type, is_input, name if server_name is None else server_name, is_default=is_default)
+        require(next((p for p in _get_slots(cls, is_input) if p.name == s.name), None) is None,
+                'Duplicated slot named {} in class {}'.format(s.name, class_name))
         cls.SLOTS[class_name].append(s)
 
         def prop_get(slot_name, is_input_slot, self):
@@ -279,7 +280,7 @@ def input_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc='
                      server_name=server_name, doc=doc, is_input=True)
 
 
-def output_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc=''):
+def output_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc='', is_default=False):
     """
     Create an output slot for the Stage
 
@@ -288,8 +289,10 @@ def output_slot(name='', message_type=MessageTypes.VALUE, server_name=None, doc=
     :param server_name: optionally, the name of this input on the server. If not specified,
         it is the same with ``name``.
     :param doc: Brief documentation explaining the slot
+    :param is_default: is this default output slot
     """
-    return _add_slot(name=name, message_type=message_type, server_name=server_name, doc=doc, is_input=False)
+    return _add_slot(name=name, message_type=message_type, server_name=server_name, doc=doc,
+                     is_input=False, is_default=is_default)
 
 
 ####################################################################################
@@ -356,9 +359,31 @@ class Stage(object):
     Public APIs
     """
 
+    @property
+    def default_output_slot_descriptor(self):
+        """
+        Return the default output slot descriptor of this stage.
+        This is used to provide better UX for end-user.
+
+        :rtype: SlotDescriptor
+        """
+        all_output_slots = _get_slots(self.__class__, is_input=False)
+        require(len(all_output_slots) > 0,
+                'Stage {}(name={}) has no output slot'.format(self.__class__.__name__, self.get_name()))
+
+        if len(all_output_slots) == 1:
+            default_slot = all_output_slots[0]
+        else:
+            default_slot = next((s for s in all_output_slots if s.is_default), None)
+            require(default_slot is not None, 'No default output slot defined for stage {}(name={})'.format(
+                self.__class__.__name__, self.get_name()))
+
+        return self.slot_descriptor(default_slot.name)
+
     def slot(self, slot_name='', is_input=True):
         """
         Return the slot with the given name
+
         :rtype: _Slot
         """
         s = next((s for s in _get_slots(self.__class__, is_input) if s.name == slot_name), None)
@@ -383,6 +408,11 @@ class Stage(object):
 
         # users might be providing the server name. Look it up!
         for c in dir(self):
+
+            if c == Stage.default_output_slot_descriptor.fget.__name__:
+                # skip the default output slot descriptor
+                continue
+
             p = getattr(self, c)
             if isinstance(p, SlotDescriptor) and self.slot(c, is_input=p.is_input).server_name == slot_name:
                 return p
@@ -475,7 +505,7 @@ class _BinaryTransformer(Stage):
 
 @input_slot('input_df', MessageTypes.DATAFRAME, 'inputDf')
 @output_slot('model', MessageTypes.MODEL)
-@output_slot('output_df', MessageTypes.DATAFRAME, 'outputDf')
+@output_slot('output_df', MessageTypes.DATAFRAME, 'outputDf', is_default=True)
 class _Estimator(Stage):
     pass
 
@@ -511,12 +541,11 @@ class Placeholder(Stage):
 @input_slot('input_val', MessageTypes.VALUE, server_name='inputVal')
 @output_slot('output_val', MessageTypes.VALUE, server_name='outputVal')
 class ValuePlaceholder(Placeholder):
-
     def __init__(self, name='Stage', value_type=None):
         # overwrite the actual input slot and output slot, to incorporate custom `value_type`
         msg_type = MessageTypes.VALUE if value_type is None else MessageTypes.value(value_type=value_type)
-        self._input_val_slot = _Slot('input_val', msg_type, True, 'inputVal')
-        self._output_val_slot = _Slot('output_val', msg_type, False, 'outputVal')
+        self._input_val_slot = _Slot('input_val', msg_type, True, 'inputVal', False)
+        self._output_val_slot = _Slot('output_val', msg_type, False, 'outputVal', True)
 
         super(ValuePlaceholder, self).__init__(name=name)
 

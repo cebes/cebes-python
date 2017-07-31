@@ -24,7 +24,7 @@ from pycebes.core.column import Column
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.exceptions import ServerException
 from pycebes.core.sample import DataSample
-from pycebes.core.schema import Schema
+from pycebes.core.schema import Schema, SchemaField
 from pycebes.internal.responses import TaggedDataframeResponse
 from tests import test_base
 
@@ -49,6 +49,12 @@ class TestDataframe(test_base.TestBase):
         col_name = df.columns[0]
         self.assertIsInstance(getattr(df, col_name), Column)
 
+        # get schema field using column name
+        self.assertIsInstance(df.schema[col_name], SchemaField)
+        self.assertEqual(df.schema[col_name].name, col_name)
+        with self.assertRaises(KeyError):
+            _ = df.schema['non_exists']
+
         # failed getattr
         with self.assertRaises(AttributeError):
             getattr(df, 'non_existed_column')
@@ -56,9 +62,12 @@ class TestDataframe(test_base.TestBase):
         # getitem works
         self.assertIsInstance(df[col_name], Column)
 
-        # failed getitem
+        # getitem with weird column name is still allowed
+        self.assertIsInstance(df['non_existed_column'], Column)
+
+        # getitem won't work with a key that is not a string (i.e. column name)
         with self.assertRaises(KeyError):
-            _ = df['non_existed_column']
+            _ = df[{'a': 100}]
 
     def test_get_tags(self):
         tags = self.session.dataframe.list(max_count=10)

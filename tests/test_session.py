@@ -17,6 +17,7 @@ import os
 import unittest
 
 import six
+import pandas as pd
 
 from pycebes.core import pipeline_api as pl
 from pycebes.core.dataframe import Dataframe
@@ -187,6 +188,24 @@ class TestSession(test_base.TestBase):
         self.assertIsInstance(df, Dataframe)
         self.assertEqual(len(df.columns), 40)
         self.assertFalse(all(f.storage_type == StorageTypes.STRING for f in df.schema.fields))
+
+    def test_from_pandas(self):
+        pandas_df = pd.read_csv(os.path.join(os.path.split(__file__)[0], 'data', 'cylinder_bands.csv'),
+                                header=None,
+                                names=['timestamp', 'cylinder_number', 'customer', 'job_number', 'grain_screened',
+                                       'ink_color', 'proof_on_ctd_ink', 'blade_mfg', 'cylinder_division',
+                                       'paper_type', 'ink_type', 'direct_steam', 'solvent_type', 'type_on_cylinder',
+                                       'press_type', 'press', 'unit_number', 'cylinder_size', 'paper_mill_location',
+                                       'plating_tank', 'proof_cut', 'viscosity', 'caliper', 'ink_temperature',
+                                       'humifity', 'roughness', 'blade_pressure', 'varnish_pct', 'press_speed FLOAT',
+                                       'ink_pct', 'solvent_pct', 'esa_voltage', 'esa_amperage', 'wax',
+                                       'hardener', 'roller_durometer', 'current_density', 'anode_space_ratio',
+                                       'chrome_content', 'band_type'])
+        cebes_df = self.session.from_pandas(pandas_df)
+        self.assertEqual(len(pandas_df), len(cebes_df))
+        self.assertListEqual(list(pandas_df.columns), cebes_df.columns)
+        self.assertEqual(cebes_df.schema['timestamp'].storage_type, StorageTypes.INTEGER)
+        self.assertEqual(cebes_df.schema['anode_space_ratio'].storage_type, StorageTypes.DOUBLE)
 
 if __name__ == '__main__':
     unittest.main()
