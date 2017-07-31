@@ -171,10 +171,10 @@ class Pipeline(object):
         output_slots = []
 
         for o in outputs:
-            # convenience: automatically translate placeholders into its input slot
+            # convenience: automatically translate stages into their corresponding default output slot descriptor
             slot_desc = o
-            if isinstance(slot_desc, Placeholder):
-                slot_desc = slot_desc.input_val
+            if isinstance(slot_desc, Stage):
+                slot_desc = slot_desc.default_output_slot_descriptor
             require(isinstance(slot_desc, SlotDescriptor), 'Expected an output slot, got {!r}'.format(o))
             output_slots.append(slot_desc.to_json())
 

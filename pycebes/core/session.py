@@ -14,7 +14,10 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import base64
+import os
+import tempfile
 
+import pandas as pd
 import six
 
 from pycebes.core.client import Client
@@ -225,6 +228,33 @@ class Session(object):
         :rtype: Dataframe
         """
         return self.read_local(path=path, fmt='json', options=options)
+
+    def from_pandas(self, df):
+        """
+        Upload the given `pandas` DataFrame to the server and create a Cebes Dataframe out of it.
+        Types are preserved on a best-efforts basis.
+
+        :param df: a pandas DataFrame object
+        :type df: pd.DataFrame
+        :rtype: Dataframe
+        """
+        require(isinstance(df, pd.DataFrame), 'Must be a pandas DataFrame object. Got {}'.format(type(df)))
+        with tempfile.NamedTemporaryFile('w', prefix='cebes', delete=False) as f:
+            df.to_csv(path_or_buf=f, index=False, sep=',', quotechar='"', escapechar='\\', header=True,
+                      na_rep='', date_format='yyyy-MM-dd\'T\'HH:mm:ss.SSSZZ')
+            file_name = f.name
+
+        csv_options = CsvReadOptions(infer_schema=True,
+                                     sep=',', quote='"', escape='\\', header=True,
+                                     null_value='', date_format='yyyy-MM-dd\'T\'HH:mm:ss.SSSZZ',
+                                     timestamp_format='yyyy-MM-dd\'T\'HH:mm:ss.SSSZZ')
+        cebes_df = self.read_csv(file_name, csv_options)
+        try:
+            os.remove(file_name)
+        except IOError:
+            pass
+        return cebes_df
+
 
 ########################################################################
 

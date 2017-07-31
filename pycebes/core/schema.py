@@ -125,6 +125,12 @@ class Schema(object):
     def __len__(self):
         return len(self.fields)
 
+    def __getitem__(self, item):
+        try:
+            return next(f for f in self.fields if f.name == item)
+        except StopIteration:
+            raise KeyError('Column not found: {!r}'.format(item))
+
     @classmethod
     def from_json(cls, js_data):
         """

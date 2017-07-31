@@ -171,21 +171,22 @@ class Dataframe(object):
         return '{}(id={!r})'.format(self.__class__.__name__, self.id)
 
     def __getattr__(self, item):
-        try:
-            return self[item]
-        except KeyError:
-            raise AttributeError('Attribute not found: {!r}'.format(item))
-
-    def __getitem__(self, item):
         if item in self.columns:
             return Column(SparkPrimitiveExpression(self._id, item))
+        raise AttributeError('Attribute not found: {!r}'.format(item))
 
-        if isinstance(item, six.text_type):
-            # this might be non-sense at first, but it will help in complicated queries, e.g.
-            # df.alias('left').join(...).select(df['left.*'])
-            return functions.col(item)
+    def __getitem__(self, item):
+        try:
+            return self.__getattr__(item)
+        except AttributeError:
 
-        raise KeyError('Column not found: {!r}'.format(item))
+            if isinstance(item, six.text_type):
+                # this might seem non-sense at first, but it will help in complicated queries, e.g.
+                # df.alias('left').join(...).select(df['left.*'])
+                # but this is only allowed in __getitem__(), not __getattr__()
+                return functions.col(item)
+
+            raise KeyError('Column not found: {!r}'.format(item))
 
     def __dir__(self):
         return dir(type(self)) + list(self.__dict__.keys()) + self.columns

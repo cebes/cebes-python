@@ -37,9 +37,9 @@ def _create_stage(stage_cls, stage_name=None, **kwargs):
 
     inputs = {}
     for k, v in kwargs.items():
-        if isinstance(v, stages.Placeholder):
-            # convenience: users can specify a placeholder, we will convert it into a slot
-            v = v.output_val
+        if isinstance(v, stages.Stage):
+            # convenience: users can specify a slot, we take the default output slot
+            v = v.default_output_slot_descriptor
         if isinstance(v, stages.SlotDescriptor):
             # if v is a slot descriptor, make sure its parent is in the pipeline
             ppl.add(v.parent)
