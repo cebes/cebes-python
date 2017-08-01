@@ -3,3 +3,4 @@ requests-toolbelt
 six
 pandas
 tabulate
+docker
