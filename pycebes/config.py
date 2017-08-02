@@ -9,14 +9,8 @@
 #
 # See the NOTICE file distributed with this work for information regarding copyright ownership.
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+VERSION = '0.8.0.dev0'
 
-import os
-
-SERVER_HOST = os.getenv('PYCEBES_SERVER_HOST', 'localhost')
-SERVER_PORT = int(os.getenv('PYCEBES_SERVER_PORT', '21000'))
-USERNAME = os.getenv('PYCEBES_USERNAME', '')
-PASSWORD = os.getenv('PYCEBES_PASSWORD', '')
-ENABLE_DOCKER_TESTS = os.getenv('PYCEBES_ENABLE_DOCKER_TESTS', 'True').lower() == 'true'
+# Docker image for running Cebes locally
+LOCAL_DOCKER_REPO = "phvu/cebes-private"
+LOCAL_DOCKER_TAG = "0.8.0-snapshot"

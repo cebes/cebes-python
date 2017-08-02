@@ -18,10 +18,12 @@ import random
 import time
 
 import requests
+from future.utils import raise_from
+from requests import exceptions as requests_exceptions
+from requests_toolbelt import MultipartEncoderMonitor
 
 from pycebes.core.exceptions import ServerException
 from pycebes.internal.helpers import require
-from requests_toolbelt import MultipartEncoderMonitor
 
 
 class Client(object):
@@ -84,9 +86,14 @@ class Client(object):
         :exception ConnectionError: if a connection to the server can't be established.
         :exception ValueError: if the response code is not OK
         """
-        response = self.session.post(self._server_url(uri), data=json.dumps(data))
-        require(response.status_code == requests.codes.ok, 'Unsuccessful request: {}'.format(response.text))
-        return response.json()
+        try:
+            response = self.session.post(self._server_url(uri), data=json.dumps(data))
+            require(response.status_code == requests.codes.ok, 'Unsuccessful request: {}'.format(response.text))
+            return response.json()
+
+        except requests_exceptions.ConnectionError as e:
+            # wrap this in the standard ConnectionError to ease end-users
+            raise_from(ConnectionError('{}'.format(e)), e)
 
     def wait(self, request_id, sleep_base=0.5, max_count=100):
         """

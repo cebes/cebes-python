@@ -9,6 +9,8 @@
 #
 # See the NOTICE file distributed with this work for information regarding copyright ownership.
 
+import logging
+
 
 def require(condition, msg='Requirement failed'):
     """
@@ -20,3 +22,21 @@ def require(condition, msg='Requirement failed'):
     """
     if not condition:
         raise ValueError(msg)
+
+
+def get_logger(name):
+    """
+    Get a logger with default configuration and given name
+
+    :rtype: logging.Logger
+    """
+    logger = logging.getLogger(name)
+
+    logger.setLevel(logging.INFO)
+
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter('[%(levelname)-4s] %(name)-15s: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    return logger
