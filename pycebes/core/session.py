@@ -35,10 +35,21 @@ _logger = get_logger(__name__)
 @six.python_2_unicode_compatible
 class Session(object):
     def __init__(self, host=None, port=21000, user_name='',
-                 password='', api_version='v1', interactive=True):
+                 password='', interactive=True):
         """
         Construct a new `Session` to the server at the given host and port, with the given user name and password.
-        
+
+        :param host: Hostname of the Cebes server.
+
+            If `None` (default), cebes will try to launch a new
+            docker container with a suitable version of Cebes server in it. Note that it requires you have
+            a working docker daemon on your machine.
+
+            Otherwise a string containing the host name or IP address of the Cebes server you want to connect to.
+
+        :param port: The port on which Cebes server is listening. Ignored when ``host=None``.
+        :param user_name: Username to log in to Cebes server
+        :param password: Password of the user to log in to Cebes server
         :param interactive: whether this is an interactive session, 
             in which case some diagnosis logs will be printed to stdout.
         """
@@ -53,7 +64,7 @@ class Session(object):
             _logger.info('Spark UI can be accessed at http://localhost:{}'.format(self.cebes_container.spark_port))
 
         self._client = Client(host=host, port=port, user_name=user_name,
-                              password=password, api_version=api_version, interactive=interactive)
+                              password=password, interactive=interactive)
 
         # the first session created
         session_stack = get_session_stack()

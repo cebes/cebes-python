@@ -36,7 +36,7 @@ def get_logger(name):
 
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(message)s')
+    formatter = logging.Formatter('[%(levelname)-4s] %(name)-15s: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     return logger

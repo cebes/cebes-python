@@ -4,3 +4,4 @@ six
 pandas
 tabulate
 docker
+future

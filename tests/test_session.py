@@ -16,15 +16,16 @@ from __future__ import unicode_literals
 import os
 import unittest
 
-import six
 import pandas as pd
+import six
 
 from pycebes.core import pipeline_api as pl
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.exceptions import ServerException
 from pycebes.core.pipeline import Pipeline
 from pycebes.core.schema import StorageTypes
-from pycebes.core.session import CsvReadOptions, JsonReadOptions
+from pycebes.core.session import Session, CsvReadOptions, JsonReadOptions
+from tests import config as test_config
 from tests import test_base
 
 
@@ -206,6 +207,31 @@ class TestSession(test_base.TestBase):
         self.assertListEqual(list(pandas_df.columns), cebes_df.columns)
         self.assertEqual(cebes_df.schema['timestamp'].storage_type, StorageTypes.INTEGER)
         self.assertEqual(cebes_df.schema['anode_space_ratio'].storage_type, StorageTypes.DOUBLE)
+
+    @unittest.skipUnless(test_config.ENABLE_DOCKER_TESTS, 'Docker tests are disabled')
+    def test_docker_container(self):
+        """
+        Tests for automatically start Cebes containers
+        """
+        s1 = Session(host=None)
+        df = self.load_data(s1)[0]
+        s1.dataframe.tag(df, 'test_df')
+        s1_dfs = s1.dataframe.list()
+        self.assertGreater(len(s1_dfs), 0)
+
+        # s2 should be talking to the same Cebes server with s1
+        s2 = Session(host=None)
+        self.assertEqual(repr(s1), repr(s2))
+        s2_dfs = s2.dataframe.list()
+        self.assertEqual(len(s1_dfs), len(s2_dfs))
+        self.assertTrue(all(x.id == y.id for x, y in zip(s1_dfs.tagged_objects, s2_dfs.tagged_objects)))
+
+        s1.dataframe.untag('test_df')
+        s1.close()
+
+        # any call on s2 should fail
+        with self.assertRaises(ConnectionError):
+            s2.dataframe.list()
 
 if __name__ == '__main__':
     unittest.main()

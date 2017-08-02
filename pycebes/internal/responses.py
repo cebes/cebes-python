@@ -74,6 +74,9 @@ class _TaggedResponse(object):
         for entry in js_data:
             self.tagged_objects.append(tag_entry_class(entry))
 
+    def __len__(self):
+        return len(self.tagged_objects)
+
     def __repr__(self):
         return tabulate.tabulate((e.to_dict() for e in self.tagged_objects), headers='keys')
 

@@ -13,8 +13,10 @@ import os
 import time
 
 import docker
-from docker import errors as docker_errors
+import requests
 import six
+from docker import errors as docker_errors
+from requests import exceptions as requests_exceptions
 
 from pycebes import config
 from pycebes.internal.helpers import get_logger
@@ -51,10 +53,6 @@ def _parse_container_attrs(attrs):
                                spark_port=int(attrs['NetworkSettings']['Ports']['4040/tcp'][0]['HostPort']))
 
 
-def _get_probable_cebes_containers():
-    pass
-
-
 def _start_cebes_container(client):
     """
     Start a new Cebes container
@@ -71,7 +69,20 @@ def _start_cebes_container(client):
     name_template = 'cebes-server-{}-{{}}'.format(config.LOCAL_DOCKER_TAG)
     i = 0
     container_name = name_template.format(i)
-    while len(client.containers.list(all=True, filters={'name': container_name})) > 0:
+    while True:
+        running_containers = client.containers.list(all=True, filters={'name': container_name})
+
+        # if no container has the same name, then we are good
+        if len(running_containers) == 0:
+            break
+
+        # if there is a container with the same name but it exited, remove it and use the name
+        container = running_containers[0]
+        if container.status == 'exited':
+            container.remove()
+            break
+
+        # increase the id and get a new name
         i += 1
         container_name = name_template.format(i)
 
@@ -93,8 +104,25 @@ def _start_cebes_container(client):
         raise ValueError('Unable to launch Cebes container. See logs above for more information')
 
     container_info = _parse_container_attrs(container.attrs)
-    __logger.info('Cebes container started, listening at localhost:{}'.format(container_info.cebes_port))
 
+    # wait until the service is up
+    c = 0
+    max_tries = 100
+    sess = requests.Session()
+    while c < max_tries:
+        try:
+            sess.get('http://localhost:{}'.format(container_info.cebes_port))
+            break
+        except requests_exceptions.ConnectionError:
+            time.sleep(0.5)
+            c += 1
+    sess.close()
+
+    if c == max_tries:
+        __logger.warning('Cebes container {} takes more time than usual to start. '
+                         'You might want to wait a bit more before trying again'.format(container_info))
+    else:
+        __logger.info('Cebes container started, listening at localhost:{}'.format(container_info.cebes_port))
     return container_info
 
 
@@ -118,9 +146,12 @@ def get_cebes_container():
             ', '.join('{}'.format(c) for c in running_containers)))
 
     if len(running_containers) > 0:
-        return running_containers[0]
+        container_info = running_containers[0]
+    else:
+        container_info = _start_cebes_container(client)
 
-    return _start_cebes_container(client)
+    client.api.close()
+    return container_info
 
 
 def shutdown(container_info):
@@ -138,3 +169,5 @@ def shutdown(container_info):
         __logger.error('Failed to stop container {}'.format(container_info), exc_info=1)
     except docker_errors.APIError:
         __logger.error('Failed to stop container {}'.format(container_info), exc_info=1)
+    finally:
+        client.api.close()
