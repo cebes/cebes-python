@@ -13,4 +13,4 @@ VERSION = '0.8.0.dev0'
 
 # Docker image for running Cebes locally
 LOCAL_DOCKER_REPO = "phvu/cebes-private"
-LOCAL_DOCKER_TAG = "0.8.0-snapshot"
+LOCAL_DOCKER_TAG = "0.10.0-snapshot"

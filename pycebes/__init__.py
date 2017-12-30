@@ -9,8 +9,9 @@
 #
 # See the NOTICE file distributed with this work for information regarding copyright ownership.
 
-from pycebes.core.session import Session, ReadOptions, CsvReadOptions, JsonReadOptions, ParquetReadOptions
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.functions import *
 from pycebes.core.pipeline import Pipeline
 from pycebes.core.pipeline_api import *
+from pycebes.core.session import Session, ReadOptions, CsvReadOptions, JsonReadOptions, ParquetReadOptions
+from pycebes.internal.implicits import get_default_pipeline, get_default_session

@@ -242,8 +242,9 @@ class Dataframe(object):
                 3    ECKERDS            X381      1
                 4     TARGET             R43      1
         """
+        pandas_df = self.take(n).to_pandas()
         print('ID: {}\nShape: {}\nSample {} rows:\n{!r}'.format(
-            self.id, self.shape, n, self.take(n).to_pandas()))
+            self.id, self.shape, len(pandas_df), pandas_df))
 
     """
     SQL API
