@@ -57,6 +57,7 @@ def from_json(js):
             if 'key' not in entry or 'val' not in entry:
                 raise ValueError('Invalid map entry: {!r}'.format(entry))
             d[from_json(entry['key'])] = from_json(entry['val'])
+        return d
 
     raise ValueError('Failed to parse value: {!r}'.format(js))
 

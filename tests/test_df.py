@@ -24,7 +24,7 @@ from pycebes.core.column import Column
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.exceptions import ServerException
 from pycebes.core.sample import DataSample
-from pycebes.core.schema import Schema, SchemaField
+from pycebes.core.schema import Schema, SchemaField, StorageTypes, VariableTypes
 from pycebes.internal.responses import TaggedDataframeResponse
 from tests import test_base
 
@@ -138,6 +138,43 @@ class TestDataframe(test_base.TestBase):
         self.assertTrue(10 <= len(df1) < len(df))
         self.assertListEqual(df1.columns, df.columns)
 
+    def test_select_complex_types(self):
+        df = self.cylinder_bands
+
+        # create array
+        df1 = df.select(df.customer, functions.array(df.esa_voltage, df.esa_amperage).alias('esa_array'),
+                        df.esa_voltage, df.esa_amperage).where(df.customer.isin(['TVGUIDE', 'MODMAT']))
+        self.assertListEqual(df1.columns, ['customer', 'esa_array', 'esa_voltage', 'esa_amperage'])
+        self.assertEqual(df1.schema['esa_array'].storage_type.name, 'Array[FLOAT]')
+        self.assertIs(df1.schema['esa_array'].storage_type.element_type, StorageTypes.FLOAT)
+        pandas_df = df1.take(20).to_pandas()
+        self.assertEqual(len(pandas_df), 20)
+
+        # create map
+        df2 = df.select(
+            df.customer,
+            functions.create_map(
+                df.customer, df.job_number, df.grain_screened, df.current_density).alias('map_col')).limit(100)
+        self.assertListEqual(df2.columns, ['customer', 'map_col'])
+        self.assertEqual(df2.schema['map_col'].storage_type.name, 'Map[STRING, INTEGER]')
+        self.assertIs(df2.schema['map_col'].storage_type.key_type, StorageTypes.STRING)
+        self.assertIs(df2.schema['map_col'].storage_type.value_type, StorageTypes.INTEGER)
+        pandas_df = df2.take(20).to_pandas()
+        self.assertEqual(len(pandas_df), 20)
+
+        # create struct
+        df3 = df.select(
+            df.customer,
+            functions.struct(
+                df.customer, df.job_number, df.grain_screened).alias('struct_col')).limit(100)
+        self.assertListEqual(df3.columns, ['customer', 'struct_col'])
+        self.assertEqual(df3.schema['struct_col'].storage_type.name, 'Struct[STRING,INTEGER,STRING]')
+        self.assertIs(df3.schema['struct_col'].storage_type.fields[0].storage_type, StorageTypes.STRING)
+        self.assertIs(df3.schema['struct_col'].storage_type.fields[1].storage_type, StorageTypes.INTEGER)
+        self.assertIs(df3.schema['struct_col'].storage_type.fields[2].storage_type, StorageTypes.STRING)
+        pandas_df = df3.take(20).to_pandas()
+        self.assertEqual(len(pandas_df), 20)
+
     def test_limit(self):
         df = self.cylinder_bands
         df1 = df.limit(100)
@@ -200,6 +237,36 @@ class TestDataframe(test_base.TestBase):
         self.assertEqual(len(df2.columns), len(df.columns))
         self.assertTrue('customer' not in df2.columns)
         self.assertTrue('customer_new' in df2.columns)
+
+    def test_with_column_cast(self):
+        df = self.cylinder_bands
+
+        self.assertEqual(df.schema['job_number'].storage_type, StorageTypes.INTEGER)
+        df1 = df.with_column('job_number', df.job_number.cast(StorageTypes.LONG))
+        self.assertNotEqual(df1.id, df.id)
+        self.assertEqual(df1.schema['job_number'].storage_type, StorageTypes.LONG)
+
+    def test_with_storage_type(self):
+        df = self.cylinder_bands
+
+        self.assertEqual(df.schema['job_number'].storage_type, StorageTypes.INTEGER)
+        df1 = df.with_storage_type('job_number', StorageTypes.LONG)
+        self.assertNotEqual(df1.id, df.id)
+        self.assertEqual(df1.schema['job_number'].storage_type, StorageTypes.LONG)
+
+    def test_with_variable_type(self):
+        df = self.cylinder_bands
+
+        self.assertEqual(df.schema['job_number'].variable_type, VariableTypes.DISCRETE)
+        df1 = df.with_variable_type(df.job_number, VariableTypes.ORDINAL)
+        self.assertNotEqual(df1.id, df.id)
+        self.assertEqual(df1.schema['job_number'].variable_type, VariableTypes.ORDINAL)
+
+        with self.assertRaises(ServerException) as ex:
+            df.with_variable_type(df.job_number, VariableTypes.CONTINUOUS)
+        self.assertIn('Column job_number has storage type IntegerType but '
+                      'is assigned variable type Continuous',
+                      '{}'.format(ex.exception))
 
     def test_groupby(self):
         df = self.cylinder_bands

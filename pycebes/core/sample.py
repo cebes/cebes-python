@@ -70,8 +70,10 @@ class DataSample(object):
             warnings.warn('DataSample has duplicated column names. Type casting will not be performed')
         else:
             for f in self.schema.fields:
-                df[f.name] = df[f.name].astype(dtype=f.storage_type.python_type,
-                                               errors='raise' if raise_if_error else 'ignore')
+                # dict (i.e. Map) doesn't work with pandas astype()
+                if f.storage_type.python_type is not dict:
+                    df[f.name] = df[f.name].astype(dtype=f.storage_type.python_type,
+                                                   errors='raise' if raise_if_error else 'ignore')
         return df
 
     @classmethod

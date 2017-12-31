@@ -375,7 +375,7 @@ class Column(object):
         A boolean expression that is evaluated to true if the value of this expression is contained
         by the evaluated values of the arguments.
         """
-        return self._with_expr(exprs.In, [lit(v) for v in values])
+        return self._with_expr(exprs.In, [lit(v).expr for v in values])
 
     def like(self, literal):
         """
@@ -481,7 +481,7 @@ class Column(object):
         Casts the column to a different data type.
 
         :param to: the StorageType to cast to
-        :type to: StorageTypes
+        :type to: StorageType
 
         :Example:
 
@@ -492,7 +492,7 @@ class Column(object):
             df.select(df.colA.cast("int"))
         """
         if isinstance(to, six.text_type):
-            to = StorageTypes.from_str(to)
+            to = StorageTypes.from_json(to)
         return self._bin_op(exprs.Cast, to)
 
     def bitwise_or(self, other):

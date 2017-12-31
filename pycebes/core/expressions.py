@@ -17,8 +17,8 @@ from collections import namedtuple
 
 import six
 
+from pycebes.core.schema import StorageType
 from pycebes.internal.serializer import to_json
-from pycebes.core.schema import StorageTypes
 
 _ParamConfig = namedtuple('_ParamConfig', ['name', 'param_type', 'server_name'])
 
@@ -318,8 +318,8 @@ class Cast(_UnaryExpression):
             assert isinstance(value, Expression)
             return value.to_json()
 
-        assert pc.name == 'to' and isinstance(value, StorageTypes)
-        return value.to_json()
+        assert pc.name == 'to' and isinstance(value, Literal) and isinstance(value.value, StorageType)
+        return value.value.to_json()
 
 
 """

@@ -213,11 +213,62 @@ class Session(object):
         """
         return self._read({'hive': {'tableName': table_name}})
 
-    def read_s3(self, fmt='csv', options=None):
-        pass
+    def read_s3(self, bucket, key, access_key, secret_key, region=None, fmt='csv', options=None):
+        """
+        Read a Dataframe from files stored in Amazon S3.
 
-    def read_hdfs(self, fmt='csv', options=None):
-        pass
+        :param bucket: name of the S3 bucket
+        :type bucket: str
+        :param key: path to the file(s) on S3
+        :type key: str
+        :param access_key: Amazon S3 access key
+        :type access_key: str
+        :param secret_key: Amazon S3 secret key
+        :type secret_key: str
+        :param region: S3 region, if needed.
+        :type region: str
+        :param fmt: format of the files, can be `csv`, `json`, `orc`, `parquet`, `text`
+        :param options: Additional options that dictate how the files are going to be read.
+            If specified, this can be:
+
+            - :class:`CsvReadOptions` when `fmt='csv'`,
+            - :class:`JsonReadOptions` when `fmt='json'`, or
+            - :class:`ParquetReadOptions` when `fmt='parquet'`
+
+         Other formats do not need additional options
+        :rtype: Dataframe
+        """
+        options_dict = Session._verify_data_format(fmt, options)
+        s3_options = {'accessKey': access_key, 'secretKey': secret_key,
+                      'bucketName': bucket, 'key': key,
+                      'format': fmt}
+        if region:
+            s3_options['regionName'] = region
+        return self._read({'s3': s3_options, 'readOptions': options_dict})
+
+    def read_hdfs(self, path, server=None, fmt='csv', options=None):
+        """
+        Load a dataset from HDFS.
+
+        :param path: path to the files on HDFS, e.g. `/data/dataset1`
+        :param server: Host name and port, e.g. `hdfs://server:9000`
+        :type server: str
+        :param fmt: format of the files, can be `csv`, `json`, `orc`, `parquet`, `text`
+        :param options: Additional options that dictate how the files are going to be read.
+            If specified, this can be:
+
+            - :class:`CsvReadOptions` when `fmt='csv'`,
+            - :class:`JsonReadOptions` when `fmt='json'`, or
+            - :class:`ParquetReadOptions` when `fmt='parquet'`
+
+         Other formats do not need additional options
+        :rtype: Dataframe
+        """
+        options_dict = Session._verify_data_format(fmt, options)
+        hdfs_options = {'path': path, 'format': fmt}
+        if server:
+            hdfs_options['uri'] = server
+        return self._read({'hdfs': hdfs_options, 'readOptions': options_dict})
 
     def read_local(self, path, fmt='csv', options=None):
         """

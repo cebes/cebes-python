@@ -1,7 +1,7 @@
 requests
 requests-toolbelt
 six
-pandas
+pandas>=0.20.0
 tabulate
 docker
 docker-pycreds
