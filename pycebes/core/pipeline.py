@@ -15,6 +15,7 @@ from __future__ import unicode_literals
 
 import six
 
+from pycebes.core import dataframe
 from pycebes.core.stages import SlotDescriptor, Stage, MessageType, Placeholder
 from pycebes.internal.helpers import require
 from pycebes.internal.implicits import get_pipeline_stack, get_default_session
@@ -48,6 +49,21 @@ class Model(object):
     @property
     def inputs(self):
         return dict(**self._inputs)
+
+    def transform(self, input_df):
+        """
+        Transform the given Dataframe
+
+        # Arguments
+        input_df (Dataframe): the input Dataframe to be transformed
+
+        # Returns
+        Dataframe: the Dataframe transformed by this model
+        """
+        data = {'model': {'modelId': self._id},
+                'inputDf': {'dfId': input_df.id}}
+        result = get_default_session().client.post_and_wait('model/run', data)
+        return dataframe.Dataframe.from_json(result)
 
     @classmethod
     def from_json(cls, js_data):

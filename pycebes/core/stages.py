@@ -452,7 +452,10 @@ class Stage(object):
         return {'name': self.get_input(self.name),
                 'stageClass': self.__class__.__name__,
                 'inputs': inputs,
-                'outputs': {}}
+                'outputs': {},
+                'models': {},
+                'schemas': {},
+                'newInputs': []}
 
     @staticmethod
     def _find_subclass(cls, name):

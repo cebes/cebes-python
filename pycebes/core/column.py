@@ -23,8 +23,6 @@ from pycebes.internal.helpers import require
 def lit(literal):
     """
     Return a Column object containing the given literal
-
-    :rtype: Column
     """
     if isinstance(literal, Column):
         return literal
@@ -35,10 +33,10 @@ def lit(literal):
 class Column(object):
     def __init__(self, expr):
         """
-        Represent a column of a :ref:`Dataframe`, backed by an expression.
+        Represent a column of a #Dataframe, backed by an expression.
 
-        :param expr: Expression behind this column
-        :type expr: exprs.Expression
+        # Arguments
+        expr (exprs.Expression): Expression behind this column
         """
         require(isinstance(expr, exprs.Expression), 'expr has to be an Expression, got {!r}'.format(expr))
         self.expr = expr
@@ -55,8 +53,6 @@ class Column(object):
         Helper to return a new column with the given expression class, constructed
         with the current expression as the first argument, and
         other arguments in *args
-
-        :rtype: Column
         """
         return Column(expr_class(self.expr, *args))
 
@@ -70,7 +66,8 @@ class Column(object):
         """
         Serialize the Column into JSON format
 
-        :return: JSON representation of this Column
+        # Returns
+         JSON representation of this Column
         """
         return {'expr': self.expr.to_json()}
 
@@ -83,11 +80,10 @@ class Column(object):
         """
         Returns an ordering used in sorting.
 
-        :Example:
-
-        .. code-block:: python
-
-            df.sort(df.col1.desc)
+        # Example
+        ```python
+        df.sort(df.col1.desc)
+        ```
         """
         return self._with_expr(exprs.SortOrder, exprs.SortOrder.Descending)
 
@@ -96,11 +92,10 @@ class Column(object):
         """
         Returns an ordering used in sorting.
 
-        :Example:
-
-        .. code-block:: python
-
-            df.sort(df.col1.asc)
+        # Example
+        ```python
+        df.sort(df.col1.asc)
+        ```
         """
         return self._with_expr(exprs.SortOrder, exprs.SortOrder.Ascending)
 
@@ -108,11 +103,10 @@ class Column(object):
         """
         Unary minus, i.e. negate the expression.
 
-        :Example:
-
-        .. code-block:: python
-
-            df.select(-df.cost)
+        # Example
+        ```python
+        df.select(-df.cost)
+        ```
         """
         return self._with_expr(exprs.UnaryMinus)
 
@@ -126,12 +120,11 @@ class Column(object):
         """
         Inversion of boolean expression, i.e. NOT.
 
-        :Example:
-
-        .. code-block:: python
-
-            # select rows that are not rich (isRich === false)
-            df.filter(!(df.isRich))
+        # Example
+        ```python
+        # select rows that are not rich (isRich === false)
+        df.filter(~(df.isRich))
+        ```
         """
         return self._with_expr(exprs.Not)
 
@@ -139,11 +132,10 @@ class Column(object):
         """
         Equality test.
 
-        :Example:
-
-        .. code-block:: python
-
-            df.filter(df.colA == df.colB)
+        # Example
+        ```python
+        df.filter(df.colA == df.colB)
+        ```
         """
         return self._bin_op(exprs.EqualTo, other)
 
@@ -151,55 +143,50 @@ class Column(object):
         """
         Inequality test.
 
-        :Example:
-
-        .. code-block:: python
-
-            df.select(df.colA != df.colB)
+        # Example
+        ```python
+        df.select(df.colA != df.colB)
+        ```
         """
         return Column(exprs.Not(self.__eq__(other)))
 
     def __gt__(self, other):
         """
-        :Example:
-
-        .. code-block:: python
-
-            # The following selects people older than 25.
-            people.select(people.age > 25)
+        # Example
+        ```python
+        # The following selects people older than 25.
+        people.select(people.age > 25)
+        ```
         """
         return self._bin_op(exprs.GreaterThan, other)
 
     def __lt__(self, other):
         """
-        :Example:
-
-        .. code-block:: python
-
-            # The following selects people younger than 25.
-            people.select(people.age < 25)
+        # Example
+        ```python
+        # The following selects people younger than 25.
+        people.select(people.age < 25)
+        ```
         """
         return self._bin_op(exprs.LessThan, other)
 
     def __le__(self, other):
         """
-        :Example:
-
-        .. code-block:: python
-
-            # The following selects people younger than 25.
-            people.select(people.age <= 25)
+        # Example
+        ```python
+        # The following selects people younger than 25.
+        people.select(people.age <= 25)
+        ```
         """
         return self._bin_op(exprs.LessThanOrEqual, other)
 
     def __ge__(self, other):
         """
-        :Example:
-
-        .. code-block:: python
-
-            # The following selects people younger than 25.
-            people.select(people.age >= 25)
+        # Example
+        ```python
+        # The following selects people younger than 25.
+        people.select(people.age >= 25)
+        ```
         """
         return self._bin_op(exprs.GreaterThanOrEqual, other)
 
@@ -216,19 +203,17 @@ class Column(object):
         Evaluates a list of conditions and returns one of multiple possible result expressions.
         If otherwise() is not defined at the end, `null` is returned for unmatched conditions.
 
-        :param condition: the condition to be checked
-        :param value: the output value if condition is true
-        :rtype: Column
+        # Arguments
+        condition: the condition to be checked
+        value (Column): the output value if condition is true
 
-        :Example:
-
-        .. code-block:: python
-
-
-            # encoding gender string column into integer.
-            people.select(functions.when(people.gender == "male", 0)
-                .when(people.gender == "female", 1)
-                .otherwise(2))
+        # Example
+        ```python
+        # encoding gender string column into integer.
+        people.select(functions.when(people.gender == "male", 0)
+            .when(people.gender == "female", 1)
+            .otherwise(2))
+        ```
         """
         if not isinstance(condition, Column):
             raise ValueError('Expect condition as a Column')
@@ -243,18 +228,13 @@ class Column(object):
         Evaluates a list of conditions and returns one of multiple possible result expressions.
         If otherwise() is not defined at the end, `null` is returned for unmatched conditions.
 
-        :param value:
-        :rtype: Column
-
-        :Example:
-
-        .. code-block:: python
-
-
-            # encoding gender string column into integer.
-            people.select(functions.when(people.gender == "male", 0)
-                .when(people.gender == "female", 1)
-                .otherwise(2))
+        # Example
+        ```python
+        # encoding gender string column into integer.
+        people.select(functions.when(people.gender == "male", 0)
+            .when(people.gender == "female", 1)
+            .otherwise(2))
+        ```
         """
         if not isinstance(self.expr, exprs.CaseWhen):
             raise ValueError('otherwise() can only be applied on a Column previously generated by when() function')
@@ -290,12 +270,11 @@ class Column(object):
         """
         Boolean OR.
 
-        :Example:
-
-        .. code-block:: python
-
-            # Selects people that are in school or employed.
-            people.filter(people.inSchool | people.isEmployed)
+        # Example
+        ```python
+        # Selects people that are in school or employed.
+        people.filter(people.inSchool | people.isEmployed)
+        ```
         """
         return self._bin_op(exprs.Or, other)
 
@@ -303,12 +282,11 @@ class Column(object):
         """
         Boolean AND.
 
-        :Example:
-
-        .. code-block:: python
-
-            # Selects people that are in school and employed at the same time.
-            people.select(people.inSchool & people.isEmployed)
+        # Example
+        ```python
+        # Selects people that are in school and employed at the same time.
+        people.select(people.inSchool & people.isEmployed)
+        ```
         """
         return self._bin_op(exprs.And, other)
 
@@ -316,12 +294,11 @@ class Column(object):
         """
         Sum of this expression and another expression. Only work on numeric columns.
 
-        :Example:
-
-        .. code-block:: python
-
-            # Selects the sum of a person's height and weight.
-            people.select(people.height + people.weight)
+        # Example
+        ```python
+        # Selects the sum of a person's height and weight.
+        people.select(people.height + people.weight)
+        ```
         """
         return self._bin_op(exprs.Add, other)
 
@@ -329,12 +306,11 @@ class Column(object):
         """
         Subtraction. Subtract the other expression from this expression. Only work on numeric columns.
 
-        :Example:
-
-        .. code-block:: python
-
-            # Selects the difference between people's height and their weight.
-            people.select(people.height - people.weight)
+        # Example
+        ```python
+        # Selects the difference between people's height and their weight.
+        people.select(people.height - people.weight)
+        ```
         """
         return self._bin_op(exprs.Subtract, other)
 
@@ -342,12 +318,11 @@ class Column(object):
         """
         Multiplication of this expression and another expression. Only work on numeric columns.
 
-        :Example:
-
-        .. code-block:: python
-
-            # Multiplies a person's height by their weight
-            people.select(people.height * people.weight)
+        # Example
+        ```python
+        # Multiplies a person's height by their weight
+        people.select(people.height * people.weight)
+        ```
         """
         return self._bin_op(exprs.Multiply, other)
 
@@ -355,12 +330,11 @@ class Column(object):
         """
          Division this expression by another expression. Only work on numeric columns.
 
-        :Example:
-
-        .. code-block:: python
-
-            # Divides a person's height by their weight
-            people.select(people.height / people.weight)
+        # Example
+        ```python
+        # Divides a person's height by their weight
+        people.select(people.height / people.weight)
+        ```
         """
         return self._bin_op(exprs.Divide, other)
 
@@ -381,7 +355,8 @@ class Column(object):
         """
         SQL like expression. Result will be a BooleanType column
 
-        :param literal: a string
+        # Arguments
+        literal: a string
         """
         if not isinstance(literal, six.text_type):
             raise ValueError('Expected a string, got {!r}'.format(literal))
@@ -391,7 +366,8 @@ class Column(object):
         """
         SQL RLIKE expression (LIKE with Regex). Result will be a BooleanType column
 
-        :param literal: a string
+        # Arguments
+        literal: a string
         """
         if not isinstance(literal, six.text_type):
             raise ValueError('Expected a string, got {!r}'.format(literal))
@@ -414,18 +390,17 @@ class Column(object):
         """
         An expression that returns a substring.
 
-        .. note::
+        > This is not zero-based, but 1-based index. The first character in str has index 1.
+        >
+        >    ``start_pos`` and ``length`` are handled specially:
+        >        * ``"Content".substr(1, 3)`` gives ``"Con"``
+        >        * ``"Content".substr(-100, 2)`` gives ``""``
+        >        * ``"Content".substr(-100, 102)`` gives ``"Content"``
+        >        * ``"Content".substr(2, 100)`` gives ``"ontent"``
 
-            This is not zero-based, but 1-based index. The first character in str has index 1.
-
-            ``start_pos`` and ``length`` are handled specially:
-                * ``"Content".substr(1, 3)`` gives ``"Con"``
-                * ``"Content".substr(-100, 2)`` gives ``""``
-                * ``"Content".substr(-100, 102)`` gives ``"Content"``
-                * ``"Content".substr(2, 100)`` gives ``"ontent"``
-
-        :param start_pos: starting position, can be an integer, or a ``Column`` that gives an integer
-        :param length: length of the sub-string, can be an integer, or a ``Column`` that gives an integer
+        # Arguments
+        start_pos: starting position, can be an integer, or a ``Column`` that gives an integer
+        length: length of the sub-string, can be an integer, or a ``Column`` that gives an integer
         """
         return self._with_expr(exprs.Substring, lit(start_pos).expr, lit(length).expr)
 
@@ -439,7 +414,8 @@ class Column(object):
         """
         String starts with.
 
-        :param other: string to test, can be a string, or a ``Column``  that gives a string
+        # Arguments
+        other: string to test, can be a string, or a ``Column``  that gives a string
         """
         return self._bin_op(exprs.StartsWith, other)
 
@@ -447,7 +423,8 @@ class Column(object):
         """
         String ends with.
 
-        :param other: string to test, can be a string, or a ``Column``  that gives a string
+        # Arguments
+        other: string to test, can be a string, or a ``Column``  that gives a string
         """
         return self._bin_op(exprs.StartsWith, other)
 
@@ -456,15 +433,14 @@ class Column(object):
         Gives the column an alias, or multiple aliases in case it is used on an expression
         that returns more than one column (such as ``explode``).
 
-        :Example:
+        # Example
+        ```python
+        # Renames colA to colB in select output.
+        df.select(df.colA.alias('colB'))
 
-        .. code-block:: python
-
-            # Renames colA to colB in select output.
-            df.select(df.colA.alias('colB'))
-
-            # multiple alias
-            df.select(functions.explode(df.myMap).alias('key', 'value'))
+        # multiple alias
+        df.select(functions.explode(df.myMap).alias('key', 'value'))
+        ```
         """
         if len(alias) == 1:
             return self._with_expr(exprs.Alias, alias[0])
@@ -480,16 +456,15 @@ class Column(object):
         """
         Casts the column to a different data type.
 
-        :param to: the StorageType to cast to
-        :type to: StorageType
+        # Arguments
+        to (StorageType): the StorageType to cast to
 
-        :Example:
-
-        .. code-block:: python
-
-            # Casts colA to [[IntegerType]].
-            df.select(df.colA.cast(IntegerType))
-            df.select(df.colA.cast("int"))
+        # Example
+        ```python
+        # Casts colA to [[IntegerType]].
+        df.select(df.colA.cast(IntegerType))
+        df.select(df.colA.cast("int"))
+        ```
         """
         if isinstance(to, six.text_type):
             to = StorageTypes.from_json(to)
@@ -499,11 +474,10 @@ class Column(object):
         """
         Compute bitwise OR of this expression with another expression.
 
-        :Example:
-
-        .. code-block:: python
-
+        # Example
+        ```python
             df.select(df.colA.bitwise_or(df.colB))
+        ```
         """
         return self._bin_op(exprs.BitwiseOr, other)
 
@@ -511,11 +485,10 @@ class Column(object):
         """
         Compute bitwise AND of this expression with another expression.
 
-        :Example:
-
-        .. code-block:: python
-
-            df.select(df.colA.bitwise_and(df.colB))
+        # Example
+        ```python
+        df.select(df.colA.bitwise_and(df.colB))
+        ```
         """
         return self._bin_op(exprs.BitwiseAnd, other)
 
@@ -523,11 +496,10 @@ class Column(object):
         """
         Compute bitwise XOR of this expression with another expression.
 
-        :Example:
-
-        .. code-block:: python
-
-            df.select(df.colA.bitwise_xor(df.colB))
+        # Example
+        ```python
+        df.select(df.colA.bitwise_xor(df.colB))
+        ```
         """
         return self._bin_op(exprs.BitwiseXor, other)
 
@@ -536,10 +508,9 @@ class Column(object):
         """
         Compute bitwise NOT of this expression
 
-        :Example:
-
-        .. code-block:: python
-
-            df.select(df.colA.bitwise_not)
+        # Example
+        ```python
+        df.select(df.colA.bitwise_not)
+        ```
         """
         return self._with_expr(exprs.BitwiseNot)

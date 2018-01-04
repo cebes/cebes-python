@@ -16,7 +16,7 @@ from __future__ import unicode_literals
 import datetime
 
 import tabulate
-
+import collections
 from pycebes.core.schema import Schema
 
 
@@ -27,7 +27,11 @@ class _TaggedResponseEntry(object):
         self.created_at = datetime.datetime.utcfromtimestamp(js_entry['createdAt'] / 1E3)
 
     def to_dict(self):
-        return {'Tag': self.tag, 'UUID': self.id, 'Created': self.created_at}
+        result = collections.OrderedDict()
+        result['UUID'] = self.id
+        result['Tag'] = self.tag
+        result['Created'] = self.created_at
+        return result
 
 
 class _TaggedDataframeResponseEntry(_TaggedResponseEntry):

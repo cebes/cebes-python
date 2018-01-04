@@ -340,6 +340,16 @@ class Session(object):
             pass
         return cebes_df
 
+    def load_test_datasets(self):
+        """
+        Load test datasets that come by default in Cebes server.
+
+        # Returns
+        dict: a dict of datasets, currently has only one element:
+            `{'cylinder_bands': Dataframe}`
+        """
+        response = self._client.post_and_wait('test/loaddata', data={'datasets': ['cylinder_bands']})
+        return {'cylinder_bands': Dataframe.from_json(response['dataframes'][0])}
 
 ########################################################################
 
