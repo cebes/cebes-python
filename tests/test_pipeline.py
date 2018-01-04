@@ -141,6 +141,8 @@ class TestPipeline(test_base.TestBase):
         self.assertEqual(len(df1.columns), len(df.columns) + 2)
         self.assertTrue('features' in df1.columns)
         self.assertTrue('caliper_predict' in df1.columns)
+        pandas_df = df1.take(5)
+        self.assertEqual(len(pandas_df), 5)
 
         m = r[1]
         self.assertIsInstance(m, Model)

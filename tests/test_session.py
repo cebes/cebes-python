@@ -233,5 +233,6 @@ class TestSession(test_base.TestBase):
         with self.assertRaises(ConnectionError):
             s2.dataframe.list()
 
+
 if __name__ == '__main__':
     unittest.main()

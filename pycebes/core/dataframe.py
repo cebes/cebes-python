@@ -21,7 +21,7 @@ from pycebes.core import functions
 from pycebes.core.column import Column
 from pycebes.core.expressions import SparkPrimitiveExpression, UnresolvedColumnName
 from pycebes.core.sample import DataSample
-from pycebes.core.schema import Schema
+from pycebes.core.schema import Schema, StorageTypes, VariableTypes
 from pycebes.internal.helpers import require
 from pycebes.internal.implicits import get_default_session
 from pycebes.internal.serializer import to_json
@@ -81,7 +81,17 @@ def _parse_columns(df, *columns):
 
 @six.python_2_unicode_compatible
 class Dataframe(object):
+    """
+    Representation of a Cebes Dataframe on the client side. All functions in this
+    class result in remote call to the Cebes server to perform corresponding actions.
+
+    Users should **NOT** manually construct this class.
+    """
+
     def __init__(self, _id, _schema):
+        """Construct a new Dataframe instance.
+        Should not be used by end-users.
+        """
         self._id = _id
         self._schema = _schema
 
@@ -112,8 +122,11 @@ class Dataframe(object):
         """
         Return a ``Dataframe`` instance from its JSON representation
 
-        :param js_data: a dict with ``id`` and ``schema``
-        :rtype: Dataframe
+        # Arguments
+        js_data (dict): a dict with ``id`` and ``schema``
+
+        # Returns
+        Dataframe: the result Dataframe object
         """
         require('id' in js_data and 'schema' in js_data, 'Invalid Dataframe JSON: {!r}'.format(js_data))
         return Dataframe(_id=js_data['id'], _schema=Schema.from_json(js_data['schema']))
@@ -126,8 +139,6 @@ class Dataframe(object):
     def id(self):
         """
         Return the unique ID of this :class:`Dataframe`
-
-        :rtype: six.text_type
         """
         return self._id
 
@@ -135,8 +146,6 @@ class Dataframe(object):
     def schema(self):
         """
         The Schema of this data frame
-
-        :rtype: Schema
         """
         return self._schema
 
@@ -145,12 +154,12 @@ class Dataframe(object):
         """
         Return a 2-tuple with number of rows and columns
 
-        :Example:
+        # Example
 
-        .. code-block:: python
-
+        ```python
             df.shape
                 (540, 40)
+        ```
         """
         return len(self), len(self.columns)
 
@@ -191,6 +200,38 @@ class Dataframe(object):
     def __dir__(self):
         return dir(type(self)) + list(self.__dict__.keys()) + self.columns
 
+    def with_storage_type(self, column, storage_type=StorageTypes.INTEGER):
+        """
+        Cast the given column of this Dataframe into the given storage type.
+        No-op if the new storage type is the same with the current one.
+
+        # Arguments
+        column: a string or a Column object
+        storage_type (StorageTypes): the new storage type to convert to
+
+        # Returns
+        Dataframe: this Dataframe or a new Dataframe
+        """
+        col_name = _parse_column_names(self, column)[0]
+        return self._df_command('withstoragetypes', df=self.id,
+                                storageTypes={col_name: storage_type.to_json()})
+
+    def with_variable_type(self, column, variable_type=VariableTypes.DISCRETE):
+        """
+        Manually set the variable type of the given column.
+        Raise error if the new variable type is not compatible with the storage type of the column.
+
+        # Arguments
+        column: a string or a Column object
+        variable_type (VariableTypes): the new variable type
+
+        # Returns
+        Dataframe: this Dataframe or a new Dataframe
+        """
+        col_name = _parse_column_names(self, column)[0]
+        return self._df_command('withvariabletypes', df=self.id,
+                                variableTypes={col_name: variable_type.to_json()})
+
     """
     Sampling functions
     """
@@ -199,8 +240,11 @@ class Dataframe(object):
         """
         Take a sample of this ``Dataframe``
 
-        :param n: maximum number of rows to be taken
-        :rtype: DataSample
+        # Arguments
+        n (int): maximum number of rows to be taken
+
+        # Returns
+        DataSample: sample of maximum size `n`
         """
         r = self._client.post_and_wait('df/take', {'df': self.id, 'n': n})
         return DataSample.from_json(r)
@@ -213,10 +257,13 @@ class Dataframe(object):
         therefore if the original ``Dataframe`` has ``N`` rows, the result of this function
         will *NOT* have exactly ``N * prob`` rows.
 
-        :param prob: The probability to sample each row in the ``Dataframe``
-        :param replacement: Whether to sample with replacement
-        :param seed: random seed
-        :rtype: Dataframe
+        # Arguments
+        prob (float): The probability to sample each row in the ``Dataframe``
+        replacement (bool): Whether to sample with replacement
+        seed (int): random seed
+
+        # Returns
+        Dataframe: a sample
         """
         return self._df_command('sample', df=self.id, fraction=prob,
                                 withReplacement=replacement, seed=seed)
@@ -225,25 +272,27 @@ class Dataframe(object):
         """
         Convenient function to show basic information and sample rows from this Dataframe
 
-        :param n: Number of rows to show
-        :Example:
+        # Arguments
+        n (int): Number of rows to show
 
-        .. code-block:: python
+        # Example
 
-            df.groupby(df.customer, 'cylinder_number').count().show()
-
-                ID: 4ae73a7c-27e5-43b9-b69f-43c606e38ee0
-                Shape: (490, 3)
-                Sample 5 rows:
-                    customer cylinder_number  count
-                0     MODMAT            F108      1
-                1     MODMAT              M4      1
-                2  CASLIVING             M74      1
-                3    ECKERDS            X381      1
-                4     TARGET             R43      1
+        ```python
+        df.groupby(df.customer, 'cylinder_number').count().show()
+            ID: 4ae73a7c-27e5-43b9-b69f-43c606e38ee0
+            Shape: (490, 3)
+            Sample 5 rows:
+                customer cylinder_number  count
+            0     MODMAT            F108      1
+            1     MODMAT              M4      1
+            2  CASLIVING             M74      1
+            3    ECKERDS            X381      1
+            4     TARGET             R43      1
+        ```
         """
+        pandas_df = self.take(n).to_pandas()
         print('ID: {}\nShape: {}\nSample {} rows:\n{!r}'.format(
-            self.id, self.shape, n, self.take(n).to_pandas()))
+            self.id, self.shape, len(pandas_df), pandas_df))
 
     """
     SQL API
@@ -253,32 +302,35 @@ class Dataframe(object):
         """
         Selects a set of columns based on expressions.
 
-        :param columns: list of columns, or column names
-        :rtype: Dataframe
+        # Arguments
+        columns: list of columns, or column names
 
-        :Example:
+        # Returns
+        Dataframe: result of the select operation
 
-        .. code-block:: python
+        # Example
 
-            import pycebes as cb
+        ```python
 
-            # various ways to provide arguments to `select`
-            df.select(df.customer, cb.substring('cylinder_number', 0, 1).alias('cylinder_t'),
-                      cb.col('hardener'), 'wax').show()
-                ...
-                  customer cylinder_t  hardener  wax
-                0  TVGUIDE          X       1.0  2.5
-                1  TVGUIDE          X       0.7  2.5
-                2   MODMAT          B       0.9  2.8
-                3   MASSEY          T       1.3  2.5
-                4    KMART          J       0.6  2.3
+        import pycebes as cb
 
-            # Select all columns in a dataframe can be done in several ways
-            df.select('*')
-            df.select(df['*'])
-            df.select(cb.col('*'))
-            df.alias('my_name').select('my_name.*')
+        # different ways to provide arguments to `select`
+        df.select(df.customer, cb.substring('cylinder_number', 0, 1).alias('cylinder_t'),
+                  cb.col('hardener'), 'wax').show()
+            ...
+              customer cylinder_t  hardener  wax
+            0  TVGUIDE          X       1.0  2.5
+            1  TVGUIDE          X       0.7  2.5
+            2   MODMAT          B       0.9  2.8
+            3   MASSEY          T       1.3  2.5
+            4    KMART          J       0.6  2.3
 
+        # Select all columns in a dataframe can be done in several ways
+        df.select('*')
+        df.select(df['*'])
+        df.select(cb.col('*'))
+        df.alias('my_name').select('my_name.*')
+        ```
         """
         columns = _parse_columns(self, *columns)
         return self._df_command('select', df=self.id, cols=[col.to_json() for col in columns])
@@ -287,21 +339,20 @@ class Dataframe(object):
         """
         Filters rows using the given condition.
 
-        :param condition: the condition as a Column
-        :type condition: Column
-        :rtype: Dataframe
-        :Example:
+        # Arguments
+        condition (Column): the condition as a Column
 
-        .. code-block:: python
-
-            df.where((df.hardener >= 1) & (df.wax < 2.8)).select('wax', df.hardener, df.customer).show()
-                ...
-                   wax  hardener     customer
-                0  2.5       1.0      TVGUIDE
-                1  2.5       1.3       MASSEY
-                2  2.5       1.1        ROSES
-                3  2.5       1.0  HANOVRHOUSE
-                4  2.0       1.0   GUIDEPOSTS
+        # Example
+        ```python
+        df.where((df.hardener >= 1) & (df.wax < 2.8)).select('wax', df.hardener, df.customer).show()
+            ...
+               wax  hardener     customer
+            0  2.5       1.0      TVGUIDE
+            1  2.5       1.3       MASSEY
+            2  2.5       1.1        ROSES
+            3  2.5       1.0  HANOVRHOUSE
+            4  2.0       1.0   GUIDEPOSTS
+        ```
         """
         require(isinstance(condition, Column), 'condition: expect a Column object')
         return self._df_command('where', df=self.id, cols=[condition.to_json()])
@@ -316,20 +367,20 @@ class Dataframe(object):
         """
         Returns a new Dataframe containing rows only in both this Dataframe and another Dataframe.
 
-        :param other: another Dataframe to compute the intersection
-        :type other: Dataframe
-        :Example:
+        # Arguments
+        other (Dataframe): another Dataframe to compute the intersection
 
-        .. code-block:: python
-
-            df.where(df.wax > 2).intersect(df.where(df.wax < 2.8)).select('customer', 'wax').show()
-                ...
-                        customer  wax
-                0      SERVMERCH  2.7
-                1        TVGUIDE  2.5
-                2         MODMAT  2.7
-                3           AMES  2.4
-                4  colorfulimage  2.5
+        # Example
+        ```python
+        df.where(df.wax > 2).intersect(df.where(df.wax < 2.8)).select('customer', 'wax').show()
+            ...
+                    customer  wax
+            0      SERVMERCH  2.7
+            1        TVGUIDE  2.5
+            2         MODMAT  2.7
+            3           AMES  2.4
+            4  colorfulimage  2.5
+        ```
         """
         return self._df_command('intersect', df=self.id, otherDf=other.id)
 
@@ -338,20 +389,20 @@ class Dataframe(object):
         Returns a new Dataframe containing union of rows in this Dataframe and another Dataframe
         (without deduplication)
 
-        :param other: another Dataframe to compute the union
-        :type other: Dataframe
-        :Example:
+        # Arguments
+        other (Dataframe): another Dataframe to compute the union
 
-        .. code-block:: python
-
-            df.where(df.wax < 2).union(df.where(df.wax > 2.8)).select('customer', 'wax').show()
-                ...
-                    customer  wax
-                0      USCAV  1.1
-                1   COLORTIL  1.7
-                2   COLORTIL  1.0
-                3  ABBYPRESS  1.0
-                4  ABBYPRESS  1.0
+        #Example:
+        ```python
+        df.where(df.wax < 2).union(df.where(df.wax > 2.8)).select('customer', 'wax').show()
+            ...
+                customer  wax
+            0      USCAV  1.1
+            1   COLORTIL  1.7
+            2   COLORTIL  1.0
+            3  ABBYPRESS  1.0
+            4  ABBYPRESS  1.0
+        ```
         """
         return self._df_command('union', df=self.id, otherDf=other.id)
 
@@ -360,21 +411,20 @@ class Dataframe(object):
         Returns a new Dataframe containing rows in this Dataframe but not in another Dataframe.
         This is equivalent to `EXCEPT` in SQL.
 
-        :param other: another Dataframe to compute the except
-        :type other: Dataframe
-        :Example:
+        # Arguments
+        other (Dataframe): another Dataframe to compute the except
 
-        .. code-block:: python
-
-            df.where(df.wax < 2.8).subtract(df.where(df.wax < 2)).select('customer', 'wax').show()
-                ...
-                        customer  wax
-                0      SERVMERCH  2.7
-                1        TVGUIDE  2.5
-                2         MODMAT  2.7
-                3           AMES  2.4
-                4  colorfulimage  2.5
-
+        # Example
+        ```python
+        df.where(df.wax < 2.8).subtract(df.where(df.wax < 2)).select('customer', 'wax').show()
+            ...
+                    customer  wax
+            0      SERVMERCH  2.7
+            1        TVGUIDE  2.5
+            2         MODMAT  2.7
+            3           AMES  2.4
+            4  colorfulimage  2.5
+        ```
         """
         return self._df_command('except', df=self.id, otherDf=other.id)
 
@@ -382,24 +432,21 @@ class Dataframe(object):
         """
         Join with another ``Dataframe``, using the given join expression.
 
-        :Example:
+        # Arguments
+        other (Dataframe): right side of the join
+        expr (Column): Join expression, as a ``Column``
+        join_type (str): One of: `inner`, `outer`, `left_outer`, `right_outer`, `leftsemi`, `leftanti`, `cross`
 
-        .. code-block:: python
+        # Example
+        ```python
+        df1.join(df2, df1.df1Key == df2.df2Key, join_type='outer')
 
-            df1.join(df2, df1.df1Key == df2.df2Key, join_type='outer')
+        # for self-joins, you should rename the columns so that they are accessible after the join
+        df1 = df.where(df.wax > 2).select(df[c].alias('df1_{}'.format(c)) for c in df.columns)
+        df2 = df.where(df.wax < 2.2).select(df[c].alias('df2_{}'.format(c)) for c in df.columns)
 
-            # for self-joins, you should rename the columns so that they are accessible after the join
-            df1 = df.where(df.wax > 2).select(df[c].alias('df1_{}'.format(c)) for c in df.columns)
-            df2 = df.where(df.wax < 2.2).select(df[c].alias('df2_{}'.format(c)) for c in df.columns)
-
-            df_join = df1.join(df2, df1.df1_customer == df2.df2_customer)
-
-        :param other: right side of the join
-        :type other: Dataframe
-        :param expr: Join expression, as a ``Column``
-        :type expr: Column
-        :param join_type: One of: `inner`, `outer`, `left_outer`, `right_outer`, `leftsemi`, `leftanti`, `cross`
-        :rtype: Dataframe
+        df_join = df1.join(df2, df1.df1_customer == df2.df2_customer)
+        ```
         """
         join_types = ('inner', 'outer', 'left_outer', 'right_outer', 'leftsemi', 'leftanti', 'cross')
         join_type = join_type.lower()
@@ -427,10 +474,9 @@ class Dataframe(object):
         Returns a new ``Dataframe`` by adding a column or replacing
         the existing column that has the same name (case-insensitive).
 
-        :param col_name: new column name
-        :type col_name: six.text_type
-        :param col: ``Column`` object describing the new column
-        :type col: Column
+        # Arguments
+        col_name (str): new column name
+        col (Column): ``Column`` object describing the new column
         """
         return self._df_command('withcolumn', df=self.id, colName=col_name, col=col.to_json())
 
@@ -438,8 +484,9 @@ class Dataframe(object):
         """
         Returns a new ``Dataframe`` with a column renamed.
 
-        :type existing_name: six.text_type
-        :type new_name: six.text_type
+        # Arguments
+        existing_name (str):
+        new_name (str):
         """
         return self._df_command('withcolumnrenamed', df=self.id, existingName=existing_name, newName=new_name)
 
@@ -447,30 +494,30 @@ class Dataframe(object):
         """
         Groups the ``Dataframe`` using the specified columns, so that we can run aggregation on them.
 
-        See :class:`GroupedDataframe` for all the available aggregate functions.
+        See #GroupedDataframe for all the available aggregate functions.
 
-        :param columns: list of column names or ``Column`` objects
-        :return: ``GroupedDataframe`` object
-        :rtype: GroupedDataframe
-        :Example:
+        # Arguments
+        columns: list of column names or ``Column`` objects
 
-        .. code-block:: python
+        # Returns
+        GroupedDataframe: object providing aggregation functions
 
-            df.groupby(df.customer, 'cylinder_number').count().show()
-                ...
-                    customer cylinder_number  count
-                0     MODMAT            F108      1
-                1     MODMAT              M4      1
-                2  CASLIVING             M74      1
-                3    ECKERDS            X381      1
-                4     TARGET             R43      1
+        # Example
+        ```python
+        df.groupby(df.customer, 'cylinder_number').count().show()
+            ...
+                customer cylinder_number  count
+            0     MODMAT            F108      1
+            1     MODMAT              M4      1
+            2  CASLIVING             M74      1
+            3    ECKERDS            X381      1
+            4     TARGET             R43      1
 
-            df.groupby().count().show()
-                ...
-                   count
-                0    540
-
-        See :class:`GroupedDataframe` for more examples on different aggregate functions
+        df.groupby().count().show()
+            ...
+               count
+            0    540
+        ```
 
         """
         return GroupedDataframe(df=self, agg_columns=_parse_columns(self, *columns),
@@ -481,34 +528,34 @@ class Dataframe(object):
         Create a multi-dimensional rollup for the current ``Dataframe`` using the specified columns,
         so we can run aggregation on them.
 
-        See :class:`GroupedDataframe` for all the available aggregate functions.
+        See #GroupedDataframe for all the available aggregate functions.
 
-        :param columns: list of column names or ``Column`` objects
-        :return: ``GroupedDataframe`` object
-        :rtype: GroupedDataframe
-        :Example:
+        # Arguments
+        columns: list of column names or ``Column`` objects
 
-        .. code-block:: python
+        # Returns
+        GroupedDataframe: object providing aggregation functions
 
-            df.rollup(df.customer, 'proof_on_ctd_ink').count().show()
-                ...
-                      customer proof_on_ctd_ink  count
-                0  NTLWILDLIFE              YES      1
-                1     HANHOUSE              YES      2
-                2   YIELDHOUSE              YES      1
-                3      toysrus                       3
-                4          CVS                       2
+        # Example
+        ```python
+        df.rollup(df.customer, 'proof_on_ctd_ink').count().show()
+            ...
+                  customer proof_on_ctd_ink  count
+            0  NTLWILDLIFE              YES      1
+            1     HANHOUSE              YES      2
+            2   YIELDHOUSE              YES      1
+            3      toysrus                       3
+            4          CVS                       2
 
-            df.rollup(df.customer, 'proof_on_ctd_ink').agg({'hardener': 'max', 'wax': 'avg'}).show()
-                ...
-                      customer proof_on_ctd_ink  max(hardener)  avg(wax)
-                0  NTLWILDLIFE              YES            0.6      3.00
-                1     HANHOUSE              YES            1.0      2.25
-                2   YIELDHOUSE              YES            0.5      3.00
-                3      toysrus                             2.1      2.40
-                4          CVS                             1.0      2.30
-
-        See :class:`GroupedDataframe` for more examples on different aggregate functions
+        df.rollup(df.customer, 'proof_on_ctd_ink').agg({'hardener': 'max', 'wax': 'avg'}).show()
+            ...
+                  customer proof_on_ctd_ink  max(hardener)  avg(wax)
+            0  NTLWILDLIFE              YES            0.6      3.00
+            1     HANHOUSE              YES            1.0      2.25
+            2   YIELDHOUSE              YES            0.5      3.00
+            3      toysrus                             2.1      2.40
+            4          CVS                             1.0      2.30
+        ```
         """
         return GroupedDataframe(df=self, agg_columns=_parse_columns(self, *columns),
                                 agg_type=GroupedDataframe.ROLLUP)
@@ -518,34 +565,34 @@ class Dataframe(object):
         Create a multi-dimensional cube for the current ``Dataframe`` using the specified columns,
         so we can run aggregation on them.
 
-        See :class:`GroupedDataframe` for all the available aggregate functions.
+        See #GroupedDataframe for all the available aggregate functions.
 
-        :param columns: list of column names or ``Column`` objects
-        :return: ``GroupedDataframe`` object
-        :rtype: GroupedDataframe
-        :Example:
+        # Arguments
+        columns: list of column names or ``Column`` objects
 
-        .. code-block:: python
+        # Returns
+        GroupedDataframe: object providing aggregation functions
 
-            df.cube(df.customer, 'proof_on_ctd_ink').count().show()
-                ...
-                      customer proof_on_ctd_ink  count
-                0  NTLWILDLIFE              YES      1
-                1     HANHOUSE              YES      2
-                2   YIELDHOUSE              YES      1
-                3      toysrus                       3
-                4          CVS                       2
+        # Example
+        ```python
+        df.cube(df.customer, 'proof_on_ctd_ink').count().show()
+            ...
+                  customer proof_on_ctd_ink  count
+            0  NTLWILDLIFE              YES      1
+            1     HANHOUSE              YES      2
+            2   YIELDHOUSE              YES      1
+            3      toysrus                       3
+            4          CVS                       2
 
-            df.cube(df.customer, 'proof_on_ctd_ink').agg({'hardener': 'max', 'wax': 'avg'}).show()
-                ...
-                      customer proof_on_ctd_ink  max(hardener)  avg(wax)
-                0  NTLWILDLIFE              YES            0.6      3.00
-                1     HANHOUSE              YES            1.0      2.25
-                2   YIELDHOUSE              YES            0.5      3.00
-                3      toysrus                             2.1      2.40
-                4          CVS                             1.0      2.30
-
-        See :class:`GroupedDataframe` for more examples on different aggregate functions
+        df.cube(df.customer, 'proof_on_ctd_ink').agg({'hardener': 'max', 'wax': 'avg'}).show()
+            ...
+                  customer proof_on_ctd_ink  max(hardener)  avg(wax)
+            0  NTLWILDLIFE              YES            0.6      3.00
+            1     HANHOUSE              YES            1.0      2.25
+            2   YIELDHOUSE              YES            0.5      3.00
+            3      toysrus                             2.1      2.40
+            4          CVS                             1.0      2.30
+        ```
         """
         return GroupedDataframe(df=self, agg_columns=_parse_columns(self, *columns),
                                 agg_type=GroupedDataframe.CUBE)
@@ -564,26 +611,24 @@ class Dataframe(object):
 
         Alternatively, exprs can also be a list of aggregate ``Column`` expressions.
 
-        :param exprs: a dict mapping from column name (string) to aggregate functions (string),
-            or a list of :class:`Column`
-        :rtype: Dataframe
+        # Arguments
+        exprs (dict, list): a dict mapping from column name (string) to aggregate functions (string),
+            or a list of #Column
 
-        :Example:
+        # Example
+        ```python
+        import pycebes as cb
 
-        .. code-block:: python
+        # count number of non-NA values in column `hardener`
+        df.agg(cb.count(df.hardener)).show()
+                count(hardener)
+            0              533
 
-            import pycebes as cb
+        # count number of non-NA values in all columns:
+        df.agg(*[cb.count(c).alias(c) for c in df.columns])
+        ```
 
-            # count number of non-NA values in column `hardener`
-            df.agg(cb.count(df.hardener)).show()
-                    count(hardener)
-                0              533
-
-            # count number of non-NA values in all columns:
-            df.agg(*[cb.count(c).alias(c) for c in df.columns])
-
-        See :class:`GroupedDataframe` for more examples
-
+        See #GroupedDataframe for more examples
         """
         return self.groupby().agg(*exprs)
 
@@ -595,20 +640,23 @@ class Dataframe(object):
         """
         Sort this ``Dataframe`` based on the given list of expressions.
 
-        :param args: a list of arguments to specify how to sort the Dataframe, where each element
+        # Arguments
+        args: a list of arguments to specify how to sort the Dataframe, where each element
             is either a ``Column`` object or a column name.
             When the element is a column name, it will be sorted in ascending order.
-        :return: a new ``Dataframe``
-        :Example:
 
-        .. code-block:: python
+        # Returns
+         Dataframe: a new, sorted `Dataframe`
 
-            df2 = df1.sort()
-            df2 = df1.sort(df1['timestamp'].asc, df1['customer'].desc)
-            df2 = df1.sort('timestamp', df1.customer.desc)
+        # Example
+        ```python
+        df2 = df1.sort()
+        df2 = df1.sort(df1['timestamp'].asc, df1['customer'].desc)
+        df2 = df1.sort('timestamp', df1.customer.desc)
 
-            # raise ValueError
-            df1.sort('non_exist')
+        # raise ValueError
+        df1.sort('non_exist')
+        ```
         """
         cols = []
         col_names = set(self.columns)
@@ -626,30 +674,33 @@ class Dataframe(object):
         """
         Drop columns in this ``Dataframe``
 
-        :param columns: column names
-        :return: a new ``Dataframe`` with the given columns dropped.
+        # Arguments
+        columns: column names or #Column objects
+
+        # Returns
+        Dataframe: a new ``Dataframe`` with the given columns dropped.
             If ``columns`` is empty, this ``Dataframe`` is returned
-        :Example:
 
-        .. code-block:: python
+        # Example
+        ```python
+        df1.show()
+            ...
+              customer cylinder_number  hardener
+            0  TVGUIDE            X126       1.0
+            1  TVGUIDE            X266       0.7
+            2   MODMAT              B7       0.9
+            3   MASSEY            T133       1.3
+            4    KMART             J34       0.6
 
-            df1.show()
-                ...
-                  customer cylinder_number  hardener
-                0  TVGUIDE            X126       1.0
-                1  TVGUIDE            X266       0.7
-                2   MODMAT              B7       0.9
-                3   MASSEY            T133       1.3
-                4    KMART             J34       0.6
-
-            df1.drop(df1.customer, 'hardener').show()
-                ...
-                  cylinder_number
-                0            X126
-                1            X266
-                2              B7
-                3            T133
-                4             J34
+        df1.drop(df1.customer, 'hardener').show()
+            ...
+              cylinder_number
+            0            X126
+            1            X266
+            2              B7
+            3            T133
+            4             J34
+        ```
         """
         col_names = _parse_column_names(self, *columns)
         if len(col_names) == 0:
@@ -663,32 +714,32 @@ class Dataframe(object):
 
         If no columns are given (the default), all columns will be considered
 
-        :return: a new ``Dataframe`` with duplicated rows removed
-        :Example:
+        # Returns
+        Dataframe: a new ``Dataframe`` with duplicated rows removed
 
-        .. code-block:: python
+        # Example
+        ```python
+        # original Dataframe has 540 rows
+        df.shape
+            (540, 40)
 
-            # original Dataframe has 540 rows
-            df.shape
-                (540, 40)
+        # No duplicated rows in this Dataframe, therefore the shape stays the same
+        df.drop_duplicates().shape
+            (540, 40)
 
-            # No duplicated rows in this Dataframe, therefore the shape stays the same
-            df.drop_duplicates().shape
-                (540, 40)
+        # only consider the `customer` column
+        df.drop_duplicates(df.customer).shape
+            (83, 40)
 
-            # only consider the `customer` column
-            df.drop_duplicates(df.customer).shape
-                (83, 40)
+        # we can check by computing the number of distinct values in column `customer`
+        df.select(cb.count_distinct(df.customer)).take().to_pandas()
+               count(DISTINCT customer)
+            0                        83
 
-            # we can check by computing the number of distinct values in column `customer`
-            df.select(cb.count_distinct(df.customer)).take().to_pandas()
-                   count(DISTINCT customer)
-                0                        83
-
-            # only consider 2 columns
-            df.drop_duplicates(df.customer, 'cylinder_number').shape
-                (490, 40)
-
+        # only consider 2 columns
+        df.drop_duplicates(df.customer, 'cylinder_number').shape
+            (490, 40)
+        ```
         """
         col_names = _parse_column_names(self, *columns)
         if len(col_names) == 0:
@@ -697,24 +748,26 @@ class Dataframe(object):
 
     def dropna(self, how='any', thresh=None, columns=None):
         """
-        Return object with labels on given axis omitted where some of the data are missing
+        Return a new Dataframe with rows omitted where some of the data are missing
 
-        :param how: strategy to drop rows. Accepted values are:
+        # Arguments
+        how (str): strategy to drop rows. Accepted values are:
             * ``any``: if any NA values are present, drop that label
             * ``all``: if all values are NA, drop that label
-        :param thresh: drop rows containing less than ``thresh`` non-null and non-NaN values
+        thresh (int): drop rows containing less than ``thresh`` non-null and non-NaN values
             If ``thresh`` is specified, ``how`` will be ignored.
-        :type thresh: int
-        :param columns: a list of columns to include. Default is None, meaning all columns are included
-        :return: a new ``Dataframe`` with NA values dropped
-        :Example:
+        columns (list): a list of columns to include. Default is None, meaning all columns are included
 
-        .. code-block:: python
+        # Returns
+        Dataframe: a new ``Dataframe`` with NA values dropped
 
+        # Example
+        ```python
         df.dropna()
         df.dropna(how='all')
         df.dropna(thresh=38)
         df.dropna(thresh=2, columns=[df.wax, 'proof_on_ctd_ink', df.hardener])
+        ```
         """
         if columns is None:
             columns = self.columns
@@ -733,13 +786,15 @@ class Dataframe(object):
         """
         Fill NA/NaN values using the specified value.
 
-        :param value: the value used to fill the holes. Can be a ``float``, ``string`` or a ``dict``.
+        # Arguments
+        value: the value used to fill the holes. Can be a ``float``, ``string`` or a ``dict``.
             When ``value`` is a dict, it is a map from column names to a value used to fill the holes in that column.
             In this case the value can only be of type ``int``, ``float``, ``string`` or ``bool``.
             The values will be casted to the column data type.
-        :param columns: List of columns to consider. If None, all columns are considered
-        :return: a new Dataframe with holes filled
-        :rtype: Dataframe
+        columns (list): List of columns to consider. If None, all columns are considered
+
+        # Returns:
+        Dataframe: a new Dataframe with holes filled
         """
         if columns is None:
             columns = self.columns
@@ -755,18 +810,24 @@ class Dataframe(object):
 
 @six.python_2_unicode_compatible
 class GroupedDataframe(object):
+    """
+    Represent a grouped Dataframe, providing aggregation functions.
+    """
+
     GROUPBY = 'GroupBy'
     ROLLUP = 'RollUp'
     CUBE = 'Cube'
 
     def __init__(self, df, agg_columns=(), agg_type=GROUPBY, pivot_column=None, pivot_values=()):
         """
+        Construct a new GroupDataframe object. Not to be used by end-users.
 
-        :type df: Dataframe
-        :param agg_columns: list of aggregate columns
-        :param agg_type: aggregation type
-        :param pivot_column: column name of pivot
-        :param pivot_values: pivot values
+        # Arguments
+        df (Dataframe):
+        agg_columns: list of aggregate columns
+        agg_type: aggregation type
+        pivot_column: column name of pivot
+        pivot_values: pivot values
         """
         self.df = df
         self.agg_type = agg_type
@@ -814,33 +875,33 @@ class GroupedDataframe(object):
 
         Alternatively, exprs can also be a list of aggregate ``Column`` expressions.
 
-        :param exprs: a dict mapping from column name (string) to aggregate functions (string),
+        # Arguments
+        exprs (dict, list): a dict mapping from column name (string) to aggregate functions (string),
             or a list of :class:`Column`
 
-        :Example:
+        # Example
+        ```python
+        import pycebes as cb
 
-        .. code-block:: python
+        df.groupby(df.customer).agg(cb.max(df.timestamp), cb.min('job_number'),
+                                    cb.count_distinct('job_number').alias('cnt')).show()
+            ...
+                   customer  max(timestamp)  min(job_number)  cnt
+                  WOOLWORTH        19920405            34227    5
+                   HOMESHOP        19910129            38064    1
+               homeshopping        19920712            36568    1
+                     GLOBAL        19900621            36846    1
+                        JCP        19910322            34781    2
 
-            import pycebes as cb
-
-            df.groupby(df.customer).agg(cb.max(df.timestamp), cb.min('job_number'),
-                                        cb.count_distinct('job_number').alias('cnt')).show()
-                ...
-                       customer  max(timestamp)  min(job_number)  cnt
-                      WOOLWORTH        19920405            34227    5
-                       HOMESHOP        19910129            38064    1
-                   homeshopping        19920712            36568    1
-                         GLOBAL        19900621            36846    1
-                            JCP        19910322            34781    2
-
-            df.groupby(df.customer).agg({'timestamp': 'max', 'job_number': 'min', 'job_number': 'count'}).show()
-                ...
-                       customer  max(timestamp)  count(job_number)
-                      WOOLWORTH        19920405                  9
-                       HOMESHOP        19910129                  2
-                   homeshopping        19920712                  1
-                         GLOBAL        19900621                  1
-                            JCP        19910322                  4
+        df.groupby(df.customer).agg({'timestamp': 'max', 'job_number': 'min', 'job_number': 'count'}).show()
+            ...
+                   customer  max(timestamp)  count(job_number)
+                  WOOLWORTH        19920405                  9
+                   HOMESHOP        19910129                  2
+               homeshopping        19920712                  1
+                     GLOBAL        19900621                  1
+                        JCP        19910322                  4
+        ```
         """
         agg_cols = []
 
@@ -863,28 +924,26 @@ class GroupedDataframe(object):
         """
         Counts the number of records for each group.
 
-        :Example:
+        # Example
+        ```python
+        df.groupby(df.customer).count().show()
+            ...
+                  customer  count
+                 WOOLWORTH      9
+                  HOMESHOP      2
+              homeshopping      1
+                    GLOBAL      1
+                       JCP      4
 
-        .. code-block:: python
-
-            df.groupby(df.customer).count().show()
-                ...
-                      customer  count
-                     WOOLWORTH      9
-                      HOMESHOP      2
-                  homeshopping      1
-                        GLOBAL      1
-                           JCP      4
-
-            df.groupby(df.customer, 'proof_on_ctd_ink').count().show()
-                ...
-                       customer proof_on_ctd_ink  count
-                     GUIDEPOSTS              YES      5
-                       homeshop                       4
-                  colorfulimage                       1
-                      CASLIVING              YES      2
-                          ABBEY              YES      4
-
+        df.groupby(df.customer, 'proof_on_ctd_ink').count().show()
+            ...
+                   customer proof_on_ctd_ink  count
+                 GUIDEPOSTS              YES      5
+                   homeshop                       4
+              colorfulimage                       1
+                  CASLIVING              YES      2
+                      ABBEY              YES      4
+        ```
         """
         return self._send_request(agg_func='count')
 
@@ -892,20 +951,20 @@ class GroupedDataframe(object):
         """
         Computes the min value for each numeric column for each group.
 
-        :param columns: list of column names (string). Non-numeric columns are ignored.
-        :Example:
+        # Arguments
+        columns: list of column names (string). Non-numeric columns are ignored.
 
-        .. code-block:: python
-
-            df.groupby(df.customer).min('hardener', 'wax').show()
-                ...
-                      customer  min(hardener)  min(wax)
-                     WOOLWORTH            0.0      0.00
-                      HOMESHOP            0.8      2.50
-                  homeshopping            NaN      2.50
-                        GLOBAL            1.1      3.00
-                           JCP            0.6      1.75
-
+        # Example
+        ```python
+        df.groupby(df.customer).min('hardener', 'wax').show()
+            ...
+                  customer  min(hardener)  min(wax)
+                 WOOLWORTH            0.0      0.00
+                  HOMESHOP            0.8      2.50
+              homeshopping            NaN      2.50
+                    GLOBAL            1.1      3.00
+                       JCP            0.6      1.75
+        ```
         """
         return self._send_request(agg_func='min', agg_col_names=columns)
 
@@ -913,19 +972,20 @@ class GroupedDataframe(object):
         """
         Computes the max value for each numeric column for each group.
 
-        :param columns: list of column names (string). Non-numeric columns are ignored.
-        :Example:
+        # Arguments
+        columns: list of column names (string). Non-numeric columns are ignored.
 
-        .. code-block:: python
-
-            df.groupby(df.customer).max('hardener', 'wax').show()
-                ...
-                       customer  max(hardener)  max(wax)
-                      WOOLWORTH            1.3       2.6
-                       HOMESHOP            1.8       2.5
-                   homeshopping            NaN       2.5
-                         GLOBAL            1.1       3.0
-                            JCP            1.7       3.0
+        # Example
+        ```python
+        df.groupby(df.customer).max('hardener', 'wax').show()
+            ...
+                   customer  max(hardener)  max(wax)
+                  WOOLWORTH            1.3       2.6
+                   HOMESHOP            1.8       2.5
+               homeshopping            NaN       2.5
+                     GLOBAL            1.1       3.0
+                        JCP            1.7       3.0
+        ```
         """
         return self._send_request(agg_func='max', agg_col_names=columns)
 
@@ -933,19 +993,20 @@ class GroupedDataframe(object):
         """
         Computes the average value for each numeric column for each group.
 
-        :param columns: list of column names (string). Non-numeric columns are ignored.
-        :Example:
+        # Arguments
+        columns: list of column names (string). Non-numeric columns are ignored.
 
-        .. code-block:: python
-
-            df.groupby(df.customer).mean('hardener', 'wax').show()
-                ...
-                       customer  avg(hardener)  avg(wax)
-                      WOOLWORTH       0.811111  1.744444
-                       HOMESHOP       1.300000  2.500000
-                   homeshopping            NaN  2.500000
-                         GLOBAL       1.100000  3.000000
-                            JCP       0.975000  2.437500
+        # Example
+        ```python
+        df.groupby(df.customer).mean('hardener', 'wax').show()
+            ...
+                   customer  avg(hardener)  avg(wax)
+                  WOOLWORTH       0.811111  1.744444
+                   HOMESHOP       1.300000  2.500000
+               homeshopping            NaN  2.500000
+                     GLOBAL       1.100000  3.000000
+                        JCP       0.975000  2.437500
+        ```
         """
         return self._send_request(agg_func='mean', agg_col_names=columns)
 
@@ -955,19 +1016,20 @@ class GroupedDataframe(object):
         """
         Computes the sum for each numeric column for each group.
 
-        :param columns: list of column names (string). Non-numeric columns are ignored.
-        :Example:
+        # Arguments
+        columns: list of column names (string). Non-numeric columns are ignored.
 
-        .. code-block:: python
-
-            df.groupby(df.customer).sum('hardener', 'wax').show()
-                ...
-                       customer  sum(hardener)  sum(wax)
-                      WOOLWORTH            7.3     15.70
-                       HOMESHOP            2.6      5.00
-                   homeshopping            NaN      2.50
-                         GLOBAL            1.1      3.00
-                            JCP            3.9      9.75
+        # Example
+        ```python
+        df.groupby(df.customer).sum('hardener', 'wax').show()
+            ...
+                   customer  sum(hardener)  sum(wax)
+                  WOOLWORTH            7.3     15.70
+                   HOMESHOP            2.6      5.00
+               homeshopping            NaN      2.50
+                     GLOBAL            1.1      3.00
+                        JCP            3.9      9.75
+        ```
         """
         return self._send_request(agg_func='sum', agg_col_names=columns)
 
@@ -975,46 +1037,47 @@ class GroupedDataframe(object):
         """
         Pivots a column of the ``Dataframe`` and perform the specified aggregation.
 
-        :param column: Name of the column to pivot.
-        :type column: six.text_type
-        :param values: List of values that will be translated to columns in the output ``Dataframe``
+        # Arguments
+        column (str): Name of the column to pivot.
+        values: List of values that will be translated to columns in the output ``Dataframe``
             If unspecified, Cebes will need to compute the unique values of the given column before
             the pivot, therefore it will be less efficient.
-        :rtype: GroupedDataframe
-        :Example:
 
-        .. code-block:: python
+        # Returns
+        GroupedDataframe: another `GroupedDataframe` object, on which you can call aggregation functions
 
-            # for each pair of (`customer`, `proof_on_ctd_ink`), count the number of entries
-            df.groupby(df.customer).pivot('proof_on_ctd_ink').count().show()
-                ...
-                       customer        NO  YES
-                      WOOLWORTH  1.0  1.0  7.0
-                       HOMESHOP  NaN  NaN  2.0
-                   homeshopping  1.0  NaN  NaN
-                         GLOBAL  NaN  NaN  1.0
-                            JCP  NaN  NaN  4.0
+        # Example
+        ```python
+        # for each pair of (`customer`, `proof_on_ctd_ink`), count the number of entries
+        df.groupby(df.customer).pivot('proof_on_ctd_ink').count().show()
+            ...
+                   customer        NO  YES
+                  WOOLWORTH  1.0  1.0  7.0
+                   HOMESHOP  NaN  NaN  2.0
+               homeshopping  1.0  NaN  NaN
+                     GLOBAL  NaN  NaN  1.0
+                        JCP  NaN  NaN  4.0
 
-            # for each pair of (`customer`, `proof_on_ctd_ink`), get the max value of `hardener`
-            df.groupby(df.customer).pivot('proof_on_ctd_ink').max('hardener').show()
-                ...
-                      customer        NO  YES
-                     WOOLWORTH  1.0  0.0  1.3
-                      HOMESHOP  NaN  NaN  1.8
-                  homeshopping  NaN  NaN  NaN
-                        GLOBAL  NaN  NaN  1.1
-                           JCP  NaN  NaN  1.7
+        # for each pair of (`customer`, `proof_on_ctd_ink`), get the max value of `hardener`
+        df.groupby(df.customer).pivot('proof_on_ctd_ink').max('hardener').show()
+            ...
+                  customer        NO  YES
+                 WOOLWORTH  1.0  0.0  1.3
+                  HOMESHOP  NaN  NaN  1.8
+              homeshopping  NaN  NaN  NaN
+                    GLOBAL  NaN  NaN  1.1
+                       JCP  NaN  NaN  1.7
 
-            # specify the pivot values, more efficient
-            df.groupby(df.customer).pivot('proof_on_ctd_ink', values=['YES', 'NO']).count().show()
-                ...
-                       customer  YES   NO
-                      WOOLWORTH  7.0  1.0
-                       HOMESHOP  2.0  NaN
-                   homeshopping  NaN  NaN
-                         GLOBAL  1.0  NaN
-                            JCP  4.0  NaN
-
+        # specify the pivot values, more efficient
+        df.groupby(df.customer).pivot('proof_on_ctd_ink', values=['YES', 'NO']).count().show()
+            ...
+                   customer  YES   NO
+                  WOOLWORTH  7.0  1.0
+                   HOMESHOP  2.0  NaN
+               homeshopping  NaN  NaN
+                     GLOBAL  1.0  NaN
+                        JCP  4.0  NaN
+        ```
         """
         return GroupedDataframe(df=self.df, agg_columns=self.agg_columns,
                                 agg_type=self.agg_type, pivot_column=column,

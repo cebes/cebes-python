@@ -17,6 +17,7 @@ import datetime
 import enum
 
 import six
+from pycebes.internal.helpers import require
 
 
 @enum.unique
@@ -38,50 +39,184 @@ class VariableTypes(enum.Enum):
             raise ValueError('Unknown variable type: {!r}'.format(s))
         return v
 
+    def to_json(self):
+        """
+        Return the JSON representation of this variable type
+        :return:
+        """
+        return self.value
 
-@enum.unique
-class StorageTypes(enum.Enum):
-    STRING = ('string', six.text_type)
-    BINARY = ('binary', six.binary_type)
 
-    DATE = ('date', datetime.date)
-    TIMESTAMP = ('timestamp', int)
-    CALENDAR_INTERVAL = ('calendarinterval', datetime.timedelta)
+class StorageType(object):
+    def __init__(self, cebes_type, python_type, name=None):
+        self._name = name
+        self._cebes_type = cebes_type
+        self._python_type = python_type
 
-    BOOLEAN = ('boolean', bool)
-    SHORT = ('short', int)
-    INTEGER = ('integer', int)
-    LONG = ('long', int)
-    FLOAT = ('float', float)
-    DOUBLE = ('double', float)
-    VECTOR = ('vector', list)
-
-    # TODO: re-do complex storage types
-    ARRAY = ('array', list)
-    MAP = ('map', dict)
-    STRUCT = ('struct', list)
+    @property
+    def name(self):
+        return self._name or self._cebes_type
 
     @property
     def cebes_type(self):
-        return self.value[0]
+        return self._cebes_type
 
     @property
     def python_type(self):
-        return self.value[1]
+        return self._python_type
 
     def to_json(self):
+        return self._cebes_type
+
+
+class ArrayType(StorageType):
+
+    def __init__(self, element_type):
         """
-        Return the JSON representation of this storage type
-        :return:
+        # Arguments
+        element_type (StorageType): type of the element in this array
         """
-        return self.cebes_type
+        super(ArrayType, self).__init__('Array[{}]'.format(element_type.cebes_type), list,
+                                        name='Array[{}]'.format(element_type.name))
+        self._element_type = element_type
+
+    @property
+    def element_type(self):
+        return self._element_type
+
+    def to_json(self):
+        return {'elementType': self._element_type.to_json()}
+
+    @staticmethod
+    def from_json(js_val):
+        require(isinstance(js_val, dict) and 'elementType' in js_val)
+        return ArrayType(StorageTypes.from_json(js_val['elementType']))
+
+
+class MapType(StorageType):
+
+    def __init__(self, key_type, value_type):
+        """
+        # Arguments
+        key_type (StorageType): type of the key
+        value_type (StorageType): type of the value
+        """
+        super(MapType, self).__init__('Map[{}, {}]'.format(key_type.cebes_type, value_type.cebes_type), dict,
+                                      name='Map[{}, {}]'.format(key_type.name, value_type.name))
+        self._key_type = key_type
+        self._value_type = value_type
+
+    @property
+    def key_type(self):
+        return self._key_type
+
+    @property
+    def value_type(self):
+        return self._value_type
+
+    def to_json(self):
+        return {'keyType': self._key_type.to_json(), 'valueType': self._value_type.to_json()}
+
+    @staticmethod
+    def from_json(js_val):
+        require(isinstance(js_val, dict) and 'keyType' in js_val and 'valueType' in js_val)
+        return MapType(StorageTypes.from_json(js_val['keyType']),
+                       StorageTypes.from_json(js_val['valueType']))
+
+
+class StructField(object):
+    def __init__(self, name, storage_type):
+        self._name = name
+        self._storage_type = storage_type
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def storage_type(self):
+        return self._storage_type
+
+    def to_json(self):
+        return {'name': self._name, 'storageType': self._storage_type.to_json(), 'metadata': {}}
+
+    @staticmethod
+    def from_json(js_val):
+        require(isinstance(js_val, dict) and 'name' in js_val and 'storageType' in js_val)
+        return StructField(js_val['name'],
+                           StorageTypes.from_json(js_val['storageType']))
+
+
+class StructType(StorageType):
+
+    def __init__(self, fields):
+        super(StructType, self).__init__(
+            'Struct[{}]'.format(','.join(f.storage_type.cebes_type for f in fields)),
+            dict,
+            name='Struct[{}]'.format(','.join(f.storage_type.name for f in fields)))
+        self._fields = fields
+
+    @property
+    def fields(self):
+        return self._fields[:]
+
+    def to_json(self):
+        return {'fields': [f.to_json() for f in self._fields]}
+
+    @staticmethod
+    def from_json(js_val):
+        require(isinstance(js_val, dict) and 'fields' in js_val)
+        return StructType([StructField.from_json(f) for f in js_val['fields']])
+
+
+class StorageTypes(object):
+    STRING = StorageType('string', six.text_type, name='STRING')
+    BINARY = StorageType('binary', six.binary_type, name='BINARY')
+
+    DATE = StorageType('date', datetime.date, name='DATE')
+    TIMESTAMP = StorageType('timestamp', int, name='TIMESTAMP')
+    CALENDAR_INTERVAL = StorageType('calendarinterval', datetime.timedelta, name='CALENDAR_INTERVAL')
+
+    BOOLEAN = StorageType('boolean', bool, name='BOOLEAN')
+    SHORT = StorageType('short', int, name='SHORT')
+    INTEGER = StorageType('integer', int, name='INTEGER')
+    LONG = StorageType('long', int, name='LONG')
+    FLOAT = StorageType('float', float, name='FLOAT')
+    DOUBLE = StorageType('double', float, name='DOUBLE')
+    VECTOR = StorageType('vector', list, name='VECTOR')
+
+    __atomic_types__ = [STRING, BINARY,
+                        DATE, TIMESTAMP, CALENDAR_INTERVAL,
+                        BOOLEAN, SHORT, INTEGER, LONG, FLOAT, DOUBLE, VECTOR]
+
+    @staticmethod
+    def array(element_type):
+        """
+        # Arguments
+        element_type (StorageType):
+        """
+        return ArrayType(element_type)
+
+    @staticmethod
+    def map(key_type, value_type):
+        return MapType(key_type, value_type)
+
+    @staticmethod
+    def struct(fields):
+        return StructType(fields)
 
     @classmethod
-    def from_str(cls, s):
-        v = next((e for e in cls.__members__.values() if e.cebes_type == s), None)
-        if v is None:
-            raise ValueError('Unknown storage type: {!r}'.format(s))
-        return v
+    def from_json(cls, js_val):
+        v = next((e for e in cls.__atomic_types__ if e.cebes_type == js_val), None)
+        if v is not None:
+            return v
+
+        for clz in [ArrayType, MapType, StructType]:
+            try:
+                return clz.from_json(js_val)
+            except ValueError:
+                pass
+        raise ValueError('Unknown storage type: {!r}'.format(js_val))
 
 
 @six.python_2_unicode_compatible
@@ -142,7 +277,7 @@ class Schema(object):
         :rtype: Schema
         """
         fields = [SchemaField(name=d.get('name', ''),
-                              storage_type=StorageTypes.from_str(d.get('storageType', '')),
+                              storage_type=StorageTypes.from_json(d.get('storageType', '')),
                               variable_type=VariableTypes.from_str(d.get('variableType', '')))
                   for d in js_data.get('fields', [])]
         return Schema(fields=fields)

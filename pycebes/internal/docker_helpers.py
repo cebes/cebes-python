@@ -16,6 +16,7 @@ import docker
 import requests
 import six
 from docker import errors as docker_errors
+from future.utils import raise_from
 from requests import exceptions as requests_exceptions
 
 from pycebes import config
@@ -38,7 +39,11 @@ class _CebesContainerInfo(object):
 
 def _get_docker_client():
     """Returns the docker client"""
-    return docker.from_env(version='auto')
+    try:
+        return docker.from_env(version='auto')
+    except docker_errors.DockerException as e:
+        err_msg = 'Could not create docker client: {}. Have you started the docker daemon?'.format(e)
+        raise_from(ValueError(err_msg), e)
 
 
 def _parse_container_attrs(attrs):
