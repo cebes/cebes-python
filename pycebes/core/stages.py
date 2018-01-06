@@ -528,6 +528,11 @@ class _HasOutputCol(Stage):
     pass
 
 
+@input_slot('input_df', MessageTypes.DATAFRAME, 'inputDf')
+@output_slot('metric_value', MessageTypes.value(value_type='double'), 'metricValue', is_default=True)
+class _Evaluator(Stage):
+    pass
+
 ####################################################################################
 
 ####################################################################################
@@ -643,4 +648,14 @@ class _LinearRegressionInputs(_HasFeaturesCol, _HasLabelCol, _HasPredictionCol):
 
 
 class LinearRegression(_Estimator, _LinearRegressionInputs):
+    pass
+
+
+"""
+Evaluators
+"""
+
+
+@input_slot('metric_name', MessageTypes.VALUE, server_name='metricName')
+class RegressionEvaluator(_Evaluator, _HasLabelCol, _HasPredictionCol):
     pass

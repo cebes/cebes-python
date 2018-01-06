@@ -166,3 +166,62 @@ def linear_regression(df, features_col, label_col, prediction_col='prediction',
                          fit_intercept=fit_intercept, max_iter=max_iter, reg_param=reg_param,
                          standardization=standardization, tolerance=tolerance,
                          weight_col=weight_col, solver=solver)
+
+
+"""
+Evaluators
+"""
+
+
+def _regression_evaluator(df, metric_name, label_col, prediction_col='prediction', name=None):
+    return _create_stage(stages.RegressionEvaluator, name,
+                         input_df=df, metric_name=metric_name,
+                         label_col=label_col, prediction_col=prediction_col)
+
+
+def rmse(df, label_col, prediction_col='prediction', name=None):
+    """
+
+    :param df:
+    :param label_col:
+    :param prediction_col:
+    :param name:
+    :return:
+    """
+    return _regression_evaluator(df, 'rmse', label_col, prediction_col, name)
+
+
+def mse(df, label_col, prediction_col='prediction', name=None):
+    """
+
+    :param df:
+    :param label_col:
+    :param prediction_col:
+    :param name:
+    :return:
+    """
+    return _regression_evaluator(df, 'mse', label_col, prediction_col, name)
+
+
+def r2(df, label_col, prediction_col='prediction', name=None):
+    """
+
+    :param df:
+    :param label_col:
+    :param prediction_col:
+    :param name:
+    :return:
+    """
+    return _regression_evaluator(df, 'r2', label_col, prediction_col, name)
+
+
+def mae(df, label_col, prediction_col='prediction', name=None):
+    """
+
+    :param df:
+    :param label_col:
+    :param prediction_col:
+    :param name:
+    :return:
+    """
+    return _regression_evaluator(df, 'mae', label_col, prediction_col, name)
