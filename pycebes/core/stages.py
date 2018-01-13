@@ -488,7 +488,8 @@ class Stage(object):
         name = js_data['name']
         inputs = {}
         for k, v in js_data['inputs'].items():
-            inputs[k] = MessageType.from_json(v)
+            if k != 'name':
+                inputs[k] = MessageType.from_json(v)
 
         return clazz(name=name, **inputs)
 
