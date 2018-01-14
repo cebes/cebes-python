@@ -176,7 +176,7 @@ class _DockerContainerStarter(object):
 
         # wait until the service is up
         c = 0
-        max_tries = 100
+        max_tries = 200
         sess = requests.Session()
         connected = False
         while c < max_tries and not connected:

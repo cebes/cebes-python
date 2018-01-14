@@ -542,7 +542,7 @@ class _PipelineHelper(_TagHelper):
 
         tag_info = self._client.post_and_wait('pipeline/taginfo', data)
         repo_port = int(tag_info['port'])
-        _logger.info('Pushing to repository {}:{}'.format(tag_info['host'], repo_port))
+        _logger.info('Using repository {}:{}'.format(tag_info['host'], repo_port))
         token = self._read_repo_creds(tag_info['host'], repo_port)
 
         data = {'tag': tag_info['tag'], 'host': tag_info['host'], 'port': repo_port}
