@@ -80,6 +80,7 @@ class Model(object):
                      metadata=js_data.get('metaData', {}))
 
 
+@six.python_2_unicode_compatible
 class Pipeline(object):
     def __init__(self, _id=None, stages=None):
         self._id = _id
@@ -89,6 +90,11 @@ class Pipeline(object):
     @property
     def id(self):
         return self._id
+
+    @property
+    def stages(self):
+        """Convenient method to list all stages in a dict, indexed by their name"""
+        return {s.get_input(s.name): s for s in self._stages}
 
     def __getitem__(self, item):
         try:
@@ -116,6 +122,10 @@ class Pipeline(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         return self._context_manager.__exit__(exc_type, exc_val, exc_tb)
 
+    def __repr__(self):
+        stage_names = ', '.join(s.get_input(s.name) for s in self._stages)
+        return '{}({})'.format(self.__class__.__name__, stage_names)
+
     def add(self, stage):
         """
         Add a stage into this pipeline. No-op if the stage is already in this pipeline.
@@ -126,6 +136,8 @@ class Pipeline(object):
         :type stage: Stage
         :return: the given stage
         """
+        require(self._id is None, 'Cannot add stage into this Pipeline since it is already created on the server')
+
         if stage not in self._stages:
             stage_name = stage.get_name()
             require(stage_name is not None, 'Please give the stage a name before adding it into the pipeline')
@@ -208,10 +220,7 @@ class Pipeline(object):
 
             feeds_json[slot_desc.full_server_name] = slot_desc.message_type.to_json(v)
 
-        # intentionally set the pipeline ID in the request to be None, so that a new pipeline will be created
-        # and a new ID is generated
         ppl_json = self.to_json()
-        ppl_json['id'] = None
 
         data = {'pipeline': ppl_json,
                 'feeds': feeds_json,
@@ -220,6 +229,7 @@ class Pipeline(object):
 
         run_result = get_default_session().client.post_and_wait('pipeline/run', data)
 
+        assert self._id is None or self._id == run_result['pipelineId']
         self._id = run_result['pipelineId']
 
         # parse the results

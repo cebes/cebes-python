@@ -12,5 +12,8 @@
 VERSION = '0.8.0.dev0'
 
 # Docker image for running Cebes locally
-LOCAL_DOCKER_REPO = "phvu/cebes-private"
-LOCAL_DOCKER_TAG = "0.10.0-snapshot"
+LOCAL_HTTP_SERVER_REPO = 'phvu/cebes-private'
+LOCAL_HTTP_SERVER_TAG = 'server-0.10.0-snapshot-mariadb'
+
+LOCAL_REPOSITORY_REPO = 'phvu/cebes-private'
+LOCAL_REPOSITORY_TAG = 'repo-0.10.0-snapshot-mariadb'

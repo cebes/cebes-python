@@ -31,12 +31,11 @@ def get_logger(name):
     :rtype: logging.Logger
     """
     logger = logging.getLogger(name)
-
     logger.setLevel(logging.INFO)
-
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    formatter = logging.Formatter('[%(levelname)-4s] %(name)-15s: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    if next((c for c in logger.handlers if isinstance(c, logging.StreamHandler)), None) is None:
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        formatter = logging.Formatter('[%(levelname)-4s] %(name)-15s: %(message)s')
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
     return logger

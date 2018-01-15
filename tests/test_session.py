@@ -233,6 +233,51 @@ class TestSession(test_base.TestBase):
         with self.assertRaises(ConnectionError):
             s2.dataframe.list()
 
+    @unittest.skipUnless(test_config.ENABLE_DOCKER_TESTS, 'Docker tests are disabled')
+    def test_local_pipeline_repository(self):
+        s1 = Session(host=None)
+        s1.start_repository_container()
+
+        s1.pipeline.login()
+
+        with Pipeline() as ppl:
+            inp_df = pl.placeholder(pl.PlaceholderTypes.DATAFRAME)
+            inp_col = pl.placeholder(pl.PlaceholderTypes.VALUE)
+            assembler = pl.vector_assembler(inp_df, [''], inp_col)
+            pl.linear_regression(assembler.output_df, features_col='features',
+                                 label_col='caliper', prediction_col='caliper_predict', reg_param=0.001)
+
+        # run just to create the pipeline on the server
+        ppl.run()
+        self.assertIsNotNone(ppl.id)
+
+        test_tag = 'pycebes-test-local-ppl:default'
+        try:
+            s1.pipeline.untag(test_tag)
+        except ServerException:
+            pass
+        s1.pipeline.tag(ppl, test_tag)
+        self.assertTrue(any(entry.tag == test_tag for entry in s1.pipeline.list().tagged_objects))
+
+        # push with the pipeline object or the tag
+        print(s1.pipeline.push(ppl))
+        print(s1.pipeline.push(test_tag))
+
+        with self.assertRaises(ServerException) as ex:
+            s1.pipeline.pull(test_tag)
+        self.assertIn('Tag pycebes-test-local-ppl:default already exists', '{}'.format(ex.exception))
+
+        # untag the existing pipeline, then pull
+        s1.pipeline.untag(test_tag)
+        self.assertTrue(all(entry.tag != test_tag for entry in s1.pipeline.list().tagged_objects))
+
+        s1.pipeline.pull(test_tag)
+        self.assertTrue(any(entry.tag == test_tag for entry in s1.pipeline.list().tagged_objects))
+
+        ppl = s1.pipeline.get(test_tag)
+        self.assertIsInstance(ppl, Pipeline)
+        s1.pipeline.untag(test_tag)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -15,6 +15,8 @@ from __future__ import unicode_literals
 
 import unittest
 
+import six
+
 from pycebes.core import pipeline_api as pl
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.exceptions import ServerException
@@ -26,13 +28,16 @@ class TestPipeline(test_base.TestBase):
 
     def test_stage_general(self):
         df = self.cylinder_bands
-        with Pipeline():
+        with Pipeline() as ppl:
             s = pl.drop(df, ['hardener', 'customer'])
             name = s.get_name()
             self.assertIsNotNone(name)
 
             with self.assertRaises(ValueError):
                 pl.drop(df, ['customer'], name=name)
+
+        self.assertIsInstance(ppl.stages, dict)
+        self.assertIsInstance(repr(ppl), six.string_types)
 
     def test_drop(self):
         df = self.cylinder_bands
@@ -49,6 +54,12 @@ class TestPipeline(test_base.TestBase):
         self.assertTrue(d in ppl)
         self.assertTrue('drop_stage' in ppl)
         self.assertEqual(d, ppl['drop_stage'])
+
+        # cannot add more stages into the pipeline
+        with self.assertRaises(ValueError) as ex:
+            with ppl:
+                pl.drop(df, ['customer'])
+        self.assertIn('Cannot add more stage into this Pipeline', '{}'.format(ex.exception))
 
     def test_placeholder(self):
         with Pipeline() as ppl:
@@ -121,18 +132,18 @@ class TestPipeline(test_base.TestBase):
         with Pipeline() as ppl:
             inp = pl.placeholder(pl.PlaceholderTypes.DATAFRAME)
             assembler = pl.vector_assembler(inp, ['viscosity', 'proof_cut'], 'features')
-            s = pl.linear_regression(assembler.output_df, features_col='features',
-                                     label_col='caliper', prediction_col='caliper_predict', reg_param=0.001)
+            lr = pl.linear_regression(assembler.output_df, features_col='features',
+                                      label_col='caliper', prediction_col='caliper_predict', reg_param=0.001)
 
         # fail because placeholder is not filled
         with self.assertRaises(ServerException) as ex:
-            ppl.run([s.output_df, s.model, assembler.output_df])
+            ppl.run([lr.output_df, lr.model, assembler.output_df])
         self.assertTrue('Input slot inputVal is undefined' in '{}'.format(ex.exception))
 
         # run again with feeds into the placeholder
         df = self.cylinder_bands.dropna(columns=['viscosity', 'proof_cut', 'caliper'])
         self.assertGreater(len(df), 10)
-        r = ppl.run([s.output_df, s.model, assembler.output_df], feeds={inp: df})
+        r = ppl.run([lr.output_df, lr.model, assembler.output_df], feeds={inp: df})
 
         self.assertEqual(len(r), 3)
         df1 = r[0]
@@ -154,6 +165,12 @@ class TestPipeline(test_base.TestBase):
         self.assertEqual(len(df2), len(df))
         self.assertEqual(len(df2.columns), len(df.columns) + 1)
         self.assertTrue('features' in df2.columns)
+
+        # Run again with a different input dataframe, model ID shouldn't change
+        new_df = df.where(df.viscosity > 40)
+        r2 = ppl.run([lr.output_df, lr.model, assembler.output_df], feeds={inp: new_df})
+
+        self.assertEqual(r2[1].id, r[1].id)
 
     def test_linear_regression_with_vector_assembler_with_placeholders(self):
 

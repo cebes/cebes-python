@@ -14,6 +14,9 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import base64
+import fcntl
+import getpass
+import json
 import os
 import tempfile
 
@@ -23,11 +26,10 @@ import six
 from pycebes.core.client import Client
 from pycebes.core.dataframe import Dataframe
 from pycebes.core.pipeline import Model, Pipeline
+from pycebes.internal import docker_helpers
 from pycebes.internal import responses
 from pycebes.internal.helpers import require, get_logger
 from pycebes.internal.implicits import get_session_stack
-from pycebes.internal import docker_helpers
-
 
 _logger = get_logger(__name__)
 
@@ -56,8 +58,9 @@ class Session(object):
 
         # local Spark
         self.cebes_container = None
+        self.repository_container = None
         if host is None:
-            self.cebes_container = docker_helpers.get_cebes_container()
+            self.cebes_container = docker_helpers.get_cebes_http_server_container()
             host = 'localhost'
             port = self.cebes_container.cebes_port
             _logger.info('Connecting to Cebes container {}'.format(self.cebes_container))
@@ -110,10 +113,10 @@ class Session(object):
         """
         Return a helper for working with tagged and cached :class:`Pipeline`
 
-        :rtype: _TagHelper
+        :rtype: _PipelineHelper
         """
-        return _TagHelper(client=self._client, cmd_prefix='pipeline',
-                          object_class=Pipeline, response_class=responses.TaggedPipelineResponse)
+        return _PipelineHelper(client=self._client, cebes_http_container=self.cebes_container,
+                               local_repo=self.repository_container)
 
     def as_default(self):
         """
@@ -141,14 +144,39 @@ class Session(object):
         """
         return get_session_stack().get_controller(self)
 
+    def start_repository_container(self, host_port=None):
+        """
+        Start a local docker container running Cebes pipeline repository,
+        with the repository listening on the host at the given port.
+
+        If `host_port` is None, a new port will be automatically allocated
+        by Docker. Therefore, to maintain consistency with your pipeline tags,
+        it is recommended to specify a high port, e.g. 35000 or 36000.
+
+        If one repository was started for this Session already, it will be returned.
+        """
+        if self.repository_container is None:
+            self.repository_container = docker_helpers.get_cebes_repository_container(
+                host_port=host_port)
+        _logger.info('Pipeline repository started on port {}'.format(self.repository_container.cebes_port))
+        return self.repository_container
+
+    def stop_repository_container(self):
+        """Stop the local pipeline repository if it is running.
+        Do nothing if there is no local repository associated with this Session."""
+        if self.repository_container is not None:
+            self.repository_container.shutdown()
+            self.repository_container = None
+
     def close(self):
         """
         Close this session. Will stop the Cebes container if this session was
         created against a local Cebes container. Otherwise it is a no-op.
         """
         if self.cebes_container is not None:
-            docker_helpers.shutdown(self.cebes_container)
+            self.cebes_container.shutdown()
             self.cebes_container = None
+        self.stop_repository_container()
 
     """
     Storage APIs
@@ -351,6 +379,7 @@ class Session(object):
         response = self._client.post_and_wait('test/loaddata', data={'datasets': ['cylinder_bands']})
         return {'cylinder_bands': Dataframe.from_json(response['dataframes'][0])}
 
+
 ########################################################################
 
 ########################################################################
@@ -428,9 +457,148 @@ class _TagHelper(object):
         return self._response_class(self._client.post_and_wait('{}/tags'.format(self._cmd_prefix), data))
 
 
+class _PipelineHelper(_TagHelper):
+    """
+    Helper for pipeline commands
+    """
+
+    def __init__(self, client, cebes_http_container, local_repo):
+        super(_PipelineHelper, self).__init__(
+            client=client, cmd_prefix='pipeline',
+            object_class=Pipeline, response_class=responses.TaggedPipelineResponse)
+        self._cebes_http_container = cebes_http_container
+        self._local_repo = local_repo
+
+    def login(self, host=None, port=80, username='', password=None):
+        """
+        Login to the repository at the given host and port, with the given name and password
+
+        If username is non-empty and password is None, pycebes will ask for a password.
+        This way the password will not be stored in plain-text in the (I)Python interpreter history.
+        """
+        if username and password is None:
+            password = getpass.getpass('{}\' password: '.format(username))
+        data = {'userName': username, 'passwordHash': password or ''}
+
+        if host:
+            data.update({'host': host, 'port': port})
+        else:
+            # if host is not provided, try to get reasonable defaults
+            default_host, default_port = self._get_default_repo_host_and_port()
+            if default_host:
+                data.update({'host': default_host, 'port': default_port})
+
+        result = self._client.post_and_wait('pipeline/login', data)
+
+        self._update_repo_creds(host=result['host'], port=result['port'],
+                                token=result['token'])
+        _logger.info('Logged into repository {}:{}'.format(result['host'], result['port']))
+
+    def push(self, ppl):
+        """
+        Push the pipeline to the repository
+        """
+        data = self._get_tag_info(ppl)
+        result = self._client.post_and_wait('pipeline/push', data)
+        _logger.info('Pushed successfully: {}'.format(result))
+
+    def pull(self, tag):
+        """
+        Pull the pipeline with the given tag, return it as an object
+
+        # Returns
+        Pipeline: the pipeline object
+        """
+        data = self._get_tag_info(tag)
+        result = self._client.post_and_wait('pipeline/pull', data)
+        _logger.info('Pulled successfully: {}'.format(data['tag']))
+        return Pipeline.from_json(result)
+
+    def _get_default_repo_host_and_port(self):
+        """Get the default repository host and port"""
+        local_cebes_http_server = self._client.host in ('127.0.0.1', 'localhost')
+        if local_cebes_http_server and self._local_repo:
+            if self._cebes_http_container:
+                # both cebes-http-server and cebes-repository are running in Docker containers
+                # use docker ip address and default repository port
+                return self._local_repo.container_ip, 22000
+            else:
+                # Cebes-http-server is running locally but not in Docker (e.g. with ./bin/start-cebes.sh)
+                # use localhost and mapped port
+                return 'localhost', self._local_repo.cebes_port
+        return None, None
+
+    def _get_tag_info(self, tag_or_ppl):
+        """Get information of the given tag."""
+        data = {}
+        if isinstance(tag_or_ppl, Pipeline):
+            data['identifier'] = tag_or_ppl.id
+        else:
+            data['identifier'] = six.text_type(tag_or_ppl)
+
+        default_host, default_port = self._get_default_repo_host_and_port()
+        if default_host:
+            data.update({'defaultRepoHost': default_host, 'defaultRepoPort': default_port})
+
+        tag_info = self._client.post_and_wait('pipeline/taginfo', data)
+        repo_port = int(tag_info['port'])
+        _logger.info('Using repository {}:{}'.format(tag_info['host'], repo_port))
+        token = self._read_repo_creds(tag_info['host'], repo_port)
+
+        data = {'tag': tag_info['tag'], 'host': tag_info['host'], 'port': repo_port}
+        if token:
+            data['token'] = token
+        return data
+
+    def _open_creds_file(self):
+        cebes_data_path = os.path.expanduser('~/.cebes')
+        os.makedirs(cebes_data_path, mode=0o700, exist_ok=True)
+        creds_file_path = os.path.join(cebes_data_path, 'repositories.json')
+        try:
+            return open(creds_file_path, 'r+')
+        except FileNotFoundError:
+            return open(creds_file_path, 'a+')
+
+    def _read_repo_creds(self, host, port):
+        with self._open_creds_file() as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                try:
+                    repositories = json.load(f)
+                except json.JSONDecodeError:
+                    repositories = []
+
+                return next((entry.get('token', '') for entry in repositories
+                            if entry['host'] == host and entry['port'] == port), '')
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+    def _update_repo_creds(self, host, port, token):
+        with self._open_creds_file() as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                try:
+                    repositories = json.load(f)
+                except json.JSONDecodeError:
+                    repositories = []
+
+                updated_repos = []
+                for entry in repositories:
+                    if entry['host'] != host or entry['port'] != port:
+                        updated_repos.append(entry)
+                updated_repos.append({'host': host, 'port': port, 'token': token})
+
+                f.seek(0)
+                f.write(json.dumps(updated_repos))
+                f.truncate()
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+
 ########################################################################
 
 ########################################################################
+
 
 class ReadOptions(object):
     PERMISSIVE = 'PERMISSIVE'
