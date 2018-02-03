@@ -390,13 +390,14 @@ class Column(object):
         """
         An expression that returns a substring.
 
-        > This is not zero-based, but 1-based index. The first character in str has index 1.
-        >
-        >    ``start_pos`` and ``length`` are handled specially:
-        >        * ``"Content".substr(1, 3)`` gives ``"Con"``
-        >        * ``"Content".substr(-100, 2)`` gives ``""``
-        >        * ``"Content".substr(-100, 102)`` gives ``"Content"``
-        >        * ``"Content".substr(2, 100)`` gives ``"ontent"``
+        This is not zero-based, but 1-based index. The first character in str has index 1.
+
+        `start_pos` and `length` are handled specially:
+
+          - ``"Content".substr(1, 3)`` gives ``"Con"``
+          - ``"Content".substr(-100, 2)`` gives ``""``
+          - ``"Content".substr(-100, 102)`` gives ``"Content"``
+          - ``"Content".substr(2, 100)`` gives ``"ontent"``
 
         # Arguments
         start_pos: starting position, can be an integer, or a ``Column`` that gives an integer
