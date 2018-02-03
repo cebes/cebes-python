@@ -36,26 +36,24 @@ _logger = get_logger(__name__)
 
 @six.python_2_unicode_compatible
 class Session(object):
-    def __init__(self, host=None, port=21000, user_name='',
-                 password='', interactive=True):
-        """
-        Construct a new `Session` to the server at the given host and port, with the given user name and password.
+    """
+    Construct a new `Session` to the server at the given host and port, with the given user name and password.
 
-        :param host: Hostname of the Cebes server.
+    # Arguments
+    host (str): Hostname of the Cebes server.
+        If `None` (default), cebes will try to launch a new
+        docker container with a suitable version of Cebes server in it. Note that it requires you have
+        a working docker daemon on your machine.
+        Otherwise a string containing the host name or IP address of the Cebes server you want to connect to.
+    port (int): The port on which Cebes server is listening. Ignored when ``host=None``.
+    user_name (str): Username to log in to Cebes server
+    password (str): Password of the user to log in to Cebes server
+    interactive (bool): whether this is an interactive session,
+        in which case some diagnosis logs will be printed to stdout.
+    """
 
-            If `None` (default), cebes will try to launch a new
-            docker container with a suitable version of Cebes server in it. Note that it requires you have
-            a working docker daemon on your machine.
-
-            Otherwise a string containing the host name or IP address of the Cebes server you want to connect to.
-
-        :param port: The port on which Cebes server is listening. Ignored when ``host=None``.
-        :param user_name: Username to log in to Cebes server
-        :param password: Password of the user to log in to Cebes server
-        :param interactive: whether this is an interactive session, 
-            in which case some diagnosis logs will be printed to stdout.
-        """
-
+    def __init__(self, host=None, port=21000, user_name='', password='', interactive=True):
+        """Construct a Session object. See class docstring for parameters."""
         # local Spark
         self.cebes_container = None
         self.repository_container = None
@@ -84,16 +82,18 @@ class Session(object):
         """
         Return the client which can be used to send requests to server
 
-        :rtype: Client
+        # Returns
+        Client: the client object
         """
         return self._client
 
     @property
     def dataframe(self):
         """
-        Return a helper for working with tagged and cached :class:`Dataframe`
+        Return a helper for working with tagged and cached #Dataframe
 
-        :rtype: _TagHelper
+        # Returns
+        _TagHelper:
         """
         return _TagHelper(client=self._client, cmd_prefix='df',
                           object_class=Dataframe, response_class=responses.TaggedDataframeResponse)
@@ -101,9 +101,10 @@ class Session(object):
     @property
     def model(self):
         """
-        Return a helper for working with tagged and cached :class:`Model`
+        Return a helper for working with tagged and cached #Model
 
-        :rtype: _TagHelper
+        # Returns
+        _TagHelper:
         """
         return _TagHelper(client=self._client, cmd_prefix='model',
                           object_class=Model, response_class=responses.TaggedModelResponse)
@@ -111,9 +112,10 @@ class Session(object):
     @property
     def pipeline(self):
         """
-        Return a helper for working with tagged and cached :class:`Pipeline`
+        Return a helper for working with tagged and cached #Pipeline
 
-        :rtype: _PipelineHelper
+        # Returns
+        _PipelineHelper:
         """
         return _PipelineHelper(client=self._client, cebes_http_container=self.cebes_container,
                                local_repo=self.repository_container)
@@ -125,22 +127,21 @@ class Session(object):
         Use with the `with` keyword to specify that all remote calls to server
         should be executed in this session.
         
-        .. code-block:: python
-
+        ```python
             sess = cb.Session()
             with sess.as_default():
                 ....
+        ```
 
         To get the current default session, use `get_default_session`.
         
-        .. note::
-
-            The default session is a property of the current thread. If you
-            create a new thread, and wish to use the default session in that
-            thread, you must explicitly add a `with sess.as_default():` in that
-            thread's function.
+        > The default session is a property of the current thread. If you
+        > create a new thread, and wish to use the default session in that
+        > thread, you must explicitly add a `with sess.as_default():` in that
+        > thread's function.
         
-        :return: A context manager using this session as the default session.
+        # Returns
+          A context manager using this session as the default session.
         """
         return get_session_stack().get_controller(self)
 
@@ -186,7 +187,8 @@ class Session(object):
         """
         Read a Dataframe from the given request
 
-        :rtype: Dataframe
+        # Returns
+        Dataframe:
         """
         return Dataframe.from_json(self._client.post_and_wait('storage/read', data=request))
 
@@ -196,7 +198,8 @@ class Session(object):
         Helper to verify the data format and options
         Return the JSON representation of the given options
 
-        :type options: ReadOptions
+        # Arguments
+        options (ReadOptions):
         """
         valid_fmts = ['csv', 'json', 'parquet', 'orc', 'text']
         fmt = fmt.lower()
@@ -221,12 +224,14 @@ class Session(object):
         """
         Read a Dataframe from a JDBC table
 
-        :param url: URL to the JDBC server
-        :param table_name: name of the table
-        :param user_name: JDBC user name
-        :param password: JDBC password
+        # Arguments
+        url (str): URL to the JDBC server
+        table_name (str): name of the table
+        user_name (str): JDBC user name
+        password (str): JDBC password
 
-        :rtype: Dataframe
+        # Returns
+        Dataframe: the Cebes Dataframe object created from the data source
         """
         return self._read({'jdbc': {'url': url, 'tableName': table_name,
                                     'userName': user_name,
@@ -236,8 +241,11 @@ class Session(object):
         """
         Read a Dataframe from Hive table of the given name
 
-        :param table_name: name of the Hive table to read data from
-        :rtype: Dataframe
+        # Arguments
+        table_name (str): name of the Hive table to read data from
+
+        # Returns
+        Dataframe: The Cebes Dataframe object created from Hive table
         """
         return self._read({'hive': {'tableName': table_name}})
 
@@ -245,26 +253,24 @@ class Session(object):
         """
         Read a Dataframe from files stored in Amazon S3.
 
-        :param bucket: name of the S3 bucket
-        :type bucket: str
-        :param key: path to the file(s) on S3
-        :type key: str
-        :param access_key: Amazon S3 access key
-        :type access_key: str
-        :param secret_key: Amazon S3 secret key
-        :type secret_key: str
-        :param region: S3 region, if needed.
-        :type region: str
-        :param fmt: format of the files, can be `csv`, `json`, `orc`, `parquet`, `text`
-        :param options: Additional options that dictate how the files are going to be read.
+        # Arguments
+        bucket (str): name of the S3 bucket
+        key (str): path to the file(s) on S3
+        access_key (str): Amazon S3 access key
+        secret_key (str): Amazon S3 secret key
+        region (str): S3 region, if needed.
+        fmt (str): format of the files, can be `csv`, `json`, `orc`, `parquet`, `text`
+        options: Additional options that dictate how the files are going to be read.
             If specified, this can be:
 
-            - :class:`CsvReadOptions` when `fmt='csv'`,
-            - :class:`JsonReadOptions` when `fmt='json'`, or
-            - :class:`ParquetReadOptions` when `fmt='parquet'`
+            - #CsvReadOptions when `fmt='csv'`,
+            - #JsonReadOptions when `fmt='json'`, or
+            - #ParquetReadOptions when `fmt='parquet'`
 
          Other formats do not need additional options
-        :rtype: Dataframe
+
+        # Returns
+        Dataframe: the Cebes Dataframe object created from the data source
         """
         options_dict = Session._verify_data_format(fmt, options)
         s3_options = {'accessKey': access_key, 'secretKey': secret_key,
@@ -278,19 +284,21 @@ class Session(object):
         """
         Load a dataset from HDFS.
 
-        :param path: path to the files on HDFS, e.g. `/data/dataset1`
-        :param server: Host name and port, e.g. `hdfs://server:9000`
-        :type server: str
-        :param fmt: format of the files, can be `csv`, `json`, `orc`, `parquet`, `text`
-        :param options: Additional options that dictate how the files are going to be read.
+        # Arguments
+        path (str): path to the files on HDFS, e.g. `/data/dataset1`
+        server (str): Host name and port, e.g. `hdfs://server:9000`
+        fmt (str): format of the files, can be `csv`, `json`, `orc`, `parquet`, `text`
+        options: Additional options that dictate how the files are going to be read.
             If specified, this can be:
 
-            - :class:`CsvReadOptions` when `fmt='csv'`,
-            - :class:`JsonReadOptions` when `fmt='json'`, or
-            - :class:`ParquetReadOptions` when `fmt='parquet'`
+            - #CsvReadOptions when `fmt='csv'`,
+            - #JsonReadOptions when `fmt='json'`, or
+            - #ParquetReadOptions when `fmt='parquet'`
 
          Other formats do not need additional options
-        :rtype: Dataframe
+
+        # Returns
+        Dataframe: the Cebes Dataframe object created from the data source
         """
         options_dict = Session._verify_data_format(fmt, options)
         hdfs_options = {'path': path, 'format': fmt}
@@ -302,17 +310,20 @@ class Session(object):
         """
         Upload a file from the local machine to the server, and create a :class:`Dataframe` out of it.
 
-        :param path: path to the local file
-        :param fmt: format of the file, can be `csv`, `json`, `orc`, `parquet`, `text`
-        :param options: Additional options that dictate how the files are going to be read.
+        # Arguments
+        path (str): path to the local file
+        fmt (str): format of the file, can be `csv`, `json`, `orc`, `parquet`, `text`
+        options: Additional options that dictate how the files are going to be read.
             If specified, this can be:
 
-            - :class:`CsvReadOptions` when `fmt='csv'`,
-            - :class:`JsonReadOptions` when `fmt='json'`, or
-            - :class:`ParquetReadOptions` when `fmt='parquet'`
+            - #CsvReadOptions when `fmt='csv'`,
+            - #JsonReadOptions when `fmt='json'`, or
+            - #ParquetReadOptions when `fmt='parquet'`
 
          Other formats do not need additional options
-        :rtype: Dataframe
+
+        # Returns
+        Dataframe: the Cebes Dataframe object created from the data source
         """
         options_dict = Session._verify_data_format(fmt=fmt, options=options)
         server_path = self._client.upload(path)['path']
@@ -322,11 +333,13 @@ class Session(object):
         """
         Upload a local CSV file to the server, and create a Dataframe out of it.
 
-        :param path: path to the local CSV file
-        :param options: Additional options that dictate how the files are going to be read.
+        # Arguments
+        path (str): path to the local CSV file
+        options (CsvReadOptions): Additional options that dictate how the files are going to be read.
             Must be either None or a :class:`CsvReadOptions` object
-        :type options: CsvReadOptions
-        :rtype: Dataframe
+
+        # Returns
+        Dataframe: the Cebes Dataframe object created from the data source
         """
         return self.read_local(path=path, fmt='csv', options=options)
 
@@ -334,11 +347,13 @@ class Session(object):
         """
         Upload a local JSON file to the server, and create a Dataframe out of it.
 
-        :param path: path to the local JSON file
-        :param options: Additional options that dictate how the files are going to be read.
+        # Arguments
+        path (str): path to the local JSON file
+        options (JsonReadOptions): Additional options that dictate how the files are going to be read.
             Must be either None or a :class:`JsonReadOptions` object
-        :type options: JsonReadOptions
-        :rtype: Dataframe
+
+        # Returns
+        Dataframe: the Cebes Dataframe object created from the data source
         """
         return self.read_local(path=path, fmt='json', options=options)
 
@@ -347,9 +362,11 @@ class Session(object):
         Upload the given `pandas` DataFrame to the server and create a Cebes Dataframe out of it.
         Types are preserved on a best-efforts basis.
 
-        :param df: a pandas DataFrame object
-        :type df: pd.DataFrame
-        :rtype: Dataframe
+        # Arguments
+        df (pd.DataFrame): a pandas DataFrame object
+
+        # Returns
+        Dataframe: the Cebes Dataframe created from the data source
         """
         require(isinstance(df, pd.DataFrame), 'Must be a pandas DataFrame object. Got {}'.format(type(df)))
         with tempfile.NamedTemporaryFile('w', prefix='cebes', delete=False) as f:
@@ -645,47 +662,52 @@ class ReadOptions(object):
 
 
 class CsvReadOptions(ReadOptions):
+    """
+    Options for reading CSV files.
+
+    # Arguments
+    sep: sets the single character as a separator for each field and value.
+    encoding: decodes the CSV files by the given encoding type
+    quote: sets the single character used for escaping quoted values where
+        the separator can be part of the value. If you would like to turn off quotations, you need to
+        set not `null` but an empty string.
+    escape: sets the single character used for escaping quotes inside an already quoted value.
+    comment: sets the single character used for skipping lines beginning with this character.
+        By default, it is disabled
+    header: uses the first line as names of columns.
+    infer_schema: infers the input schema automatically from data. It requires one extra pass over the data.
+    ignore_leading_white_space: defines whether or not leading whitespaces
+        from values being read should be skipped.
+    null_value: sets the string representation of a null value.
+        This applies to all supported types including the string type.
+    nan_value: sets the string representation of a "non-number" value
+    positive_inf: sets the string representation of a positive infinity value
+    negative_inf: sets the string representation of a negative infinity value
+    date_format: sets the string that indicates a date format.
+        Custom date formats follow the formats at `java.text.SimpleDateFormat`.
+        This applies to date type.
+    timestamp_format: sets the string that indicates a timestamp format.
+        Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type.
+    max_columns: defines a hard limit of how many columns a record can have
+    max_chars_per_column: defines the maximum number of characters allowed
+        for any given value being read. By default, it is -1 meaning unlimited length
+    max_malformed_log_per_partition: sets the maximum number of malformed rows
+        will be logged for each partition. Malformed records beyond this number will be ignored.
+    mode: allows a mode for dealing with corrupt records during parsing.
+        - #ReadOptions.PERMISSIVE - sets other fields to `null` when it meets a corrupted record.
+                When a schema is set by user, it sets `null` for extra fields
+        - #ReadOptions.DROPMALFORMED - ignores the whole corrupted records
+        - #ReadOptions.FAILFAST - throws an exception when it meets corrupted records
+
+    """
+
     def __init__(self, sep=',', encoding='UTF-8', quote='"', escape='\\', comment=None, header=False,
                  infer_schema=False, ignore_leading_white_space=False, null_value=None, nan_value='NaN',
                  positive_inf='Inf', negative_inf='-Inf', date_format='yyyy-MM-dd',
                  timestamp_format='yyyy-MM-dd\'T\'HH:mm:ss.SSSZZ', max_columns=20480,
                  max_chars_per_column=-1, max_malformed_log_per_partition=10, mode=ReadOptions.PERMISSIVE):
-        """
-        :param sep: sets the single character as a separator for each field and value.
-        :param encoding: decodes the CSV files by the given encoding type
-        :param quote: sets the single character used for escaping quoted values where
-            the separator can be part of the value. If you would like to turn off quotations, you need to
-            set not `null` but an empty string.
-        :param escape: sets the single character used for escaping quotes inside an already quoted value.
-        :param comment: sets the single character used for skipping lines beginning with this character.
-            By default, it is disabled
-        :param header: uses the first line as names of columns.
-        :param infer_schema: infers the input schema automatically from data. It requires one extra pass over the data.
-        :param ignore_leading_white_space: defines whether or not leading whitespaces
-            from values being read should be skipped.
-        :param null_value: sets the string representation of a null value.
-            This applies to all supported types including the string type.
-        :param nan_value: sets the string representation of a "non-number" value
-        :param positive_inf: sets the string representation of a positive infinity value
-        :param negative_inf: sets the string representation of a negative infinity value
-        :param date_format: sets the string that indicates a date format.
-            Custom date formats follow the formats at `java.text.SimpleDateFormat`.
-            This applies to date type.
-        :param timestamp_format: sets the string that indicates a timestamp format.
-            Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type.
-        :param max_columns: defines a hard limit of how many columns a record can have
-        :param max_chars_per_column: defines the maximum number of characters allowed
-            for any given value being read. By default, it is -1 meaning unlimited length
-        :param max_malformed_log_per_partition: sets the maximum number of malformed rows
-            will be logged for each partition. Malformed records beyond this number will be ignored.
-        :param mode: allows a mode for dealing with corrupt records during parsing.
+        """See class docstring for documentation."""
 
-            - :ref:`ReadOptions.PERMISSIVE`: sets other fields to `null` when it meets a corrupted record.
-                    When a schema is set by user, it sets `null` for extra fields
-            - :ref:`ReadOptions.DROPMALFORMED`: ignores the whole corrupted records
-            - :ref:`ReadOptions.FAILFAST`: throws an exception when it meets corrupted records
-
-        """
         super(CsvReadOptions, self).__init__(sep=sep, encoding=encoding, quote=quote,
                                              escape=escape, comment=comment, header=header,
                                              infer_schema=infer_schema,
@@ -699,37 +721,40 @@ class CsvReadOptions(ReadOptions):
 
 
 class JsonReadOptions(ReadOptions):
+    """
+    Options for reading Json files
+
+    # Arguments
+    primitives_as_string: infers all primitive values as a string type
+    prefers_decimal: infers all floating-point values as a decimal type.
+        If the values do not fit in decimal, then it infers them as doubles
+    allow_comments: ignores Java/C++ style comment in JSON records
+    allow_unquoted_field_names: allows unquoted JSON field names
+    allow_single_quotes: allows single quotes in addition to double quotes
+    allow_numeric_leading_zeros: allows leading zeros in numbers (e.g. 00012)
+    allow_backslash_escaping_any_character: allows accepting quoting of all
+        character using backslash quoting mechanism
+    mode: allows a mode for dealing with corrupt records during parsing.
+        - `ReadOptions.PERMISSIVE` - sets other fields to `null` when it meets a corrupted record.
+                When a schema is set by user, it sets `null` for extra fields
+        - `ReadOptions.DROPMALFORMED` - ignores the whole corrupted records
+        - `ReadOptions.FAILFAST` - throws an exception when it meets corrupted records
+
+    column_name_of_corrupt_record: allows renaming the new field having malformed string
+        created by `ReadOptions.PERMISSIVE` mode. This overrides `spark.sql.columnNameOfCorruptRecord`.
+    date_format: sets the string that indicates a date format.
+        Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to date type
+    timestamp_format: sets the string that indicates a timestamp format.
+        Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type
+    """
+
     def __init__(self, primitives_as_string=False, prefers_decimal=False, allow_comments=False,
                  allow_unquoted_field_names=False, allow_single_quotes=True, allow_numeric_leading_zeros=False,
                  allow_backslash_escaping_any_character=False, mode=ReadOptions.PERMISSIVE,
                  column_name_of_corrupt_record=None, date_format='yyyy-MM-dd',
                  timestamp_format="yyyy-MM-dd'T'HH:mm:ss.SSSZZ"):
-        """
-        Options for reading Json files
+        """See class docstring for documentation."""
 
-        :param primitives_as_string: infers all primitive values as a string type
-        :param prefers_decimal: infers all floating-point values as a decimal type.
-            If the values do not fit in decimal, then it infers them as doubles
-        :param allow_comments: ignores Java/C++ style comment in JSON records
-        :param allow_unquoted_field_names: allows unquoted JSON field names
-        :param allow_single_quotes: allows single quotes in addition to double quotes
-        :param allow_numeric_leading_zeros: allows leading zeros in numbers (e.g. 00012)
-        :param allow_backslash_escaping_any_character: allows accepting quoting of all
-            character using backslash quoting mechanism
-        :param mode: allows a mode for dealing with corrupt records during parsing.
-
-            - :ref:`ReadOptions.PERMISSIVE`: sets other fields to `null` when it meets a corrupted record.
-                    When a schema is set by user, it sets `null` for extra fields
-            - :ref:`ReadOptions.DROPMALFORMED`: ignores the whole corrupted records
-            - :ref:`ReadOptions.FAILFAST`: throws an exception when it meets corrupted records
-
-        :param column_name_of_corrupt_record: allows renaming the new field having malformed string
-            created by :ref:`ReadOptions.PERMISSIVE` mode. This overrides `spark.sql.columnNameOfCorruptRecord`.
-        :param date_format: sets the string that indicates a date format.
-            Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to date type
-        :param timestamp_format: sets the string that indicates a timestamp format.
-            Custom date formats follow the formats at `java.text.SimpleDateFormat`. This applies to timestamp type
-        """
         super(JsonReadOptions,
               self).__init__(primitives_as_string=primitives_as_string,
                              prefers_decimal=prefers_decimal, allow_comments=allow_comments,
@@ -742,10 +767,13 @@ class JsonReadOptions(ReadOptions):
 
 
 class ParquetReadOptions(ReadOptions):
-    def __init__(self, merge_schema=True):
-        """
-        Options for reading Parquet files
+    """
+    Options for reading Parquet files
 
-        :param merge_schema: sets whether we should merge schemas collected from all Parquet part-files.
-        """
+    # Arguments
+    merge_schema (bool): sets whether we should merge schemas collected from all Parquet part-files.
+    """
+
+    def __init__(self, merge_schema=True):
+        """See class docstring for documentation."""
         super(ParquetReadOptions, self).__init__(merge_schema=merge_schema)
