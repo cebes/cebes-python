@@ -16,7 +16,7 @@ generate:
 # that allows you to use an external Markdown file (eg. your project's README)
 # in the documentation. The path must be relative to current working directory.
 pages:
-- Home: index.md << ../README.md
+- Home: index.md << ../README.rst
 - API Reference:
   - Session: pycebes/session.md
   - Dataframe: pycebes/dataframe.md
