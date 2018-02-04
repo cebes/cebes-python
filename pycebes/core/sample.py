@@ -48,6 +48,9 @@ class DataSample(object):
     def __repr__(self):
         return '{}(schema={!r})'.format(self.__class__.__name__, self.schema)
 
+    def __str__(self):
+        return super(DataSample, self).__str__()
+
     def to_pandas(self, raise_if_error=False):
         """
         Return a pandas DataFrame representation of this sample

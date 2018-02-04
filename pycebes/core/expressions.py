@@ -90,6 +90,9 @@ class Expression(object):
         params_str = ','.join('{}={!r}'.format(pc.name, getattr(self, pc.name, None)) for pc in self._get_params())
         return '{}({})'.format(self.__class__.__name__, params_str)
 
+    def __str__(self):
+        return super(Expression, self).__str__()
+
     @staticmethod
     def _param_to_json(pc, value):
         """

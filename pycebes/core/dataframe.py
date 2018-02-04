@@ -179,6 +179,9 @@ class Dataframe(object):
     def __repr__(self):
         return '{}(id={!r})'.format(self.__class__.__name__, self.id)
 
+    def __str__(self):
+        return super(Dataframe, self).__str__()
+
     def __getattr__(self, item):
         if item in self.columns:
             return Column(SparkPrimitiveExpression(self._id, item))
@@ -840,6 +843,9 @@ class GroupedDataframe(object):
                 'pivot_values={!r})'.format(self.__class__.__name__,
                                             self.df.id, self.agg_columns,
                                             self.agg_type, self.pivot_column, self.pivot_values))
+
+    def __str__(self):
+        return super(GroupedDataframe, self).__str__()
 
     def _send_request(self, generic_agg_exprs=None, agg_func=None, agg_col_names=None):
         client = get_default_session().client

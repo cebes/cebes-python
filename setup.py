@@ -23,12 +23,12 @@ def __read_requirements():
 
 setup(
     name='pycebes',
-    version='0.10.1',
+    version='0.10.2',
     packages=find_packages(exclude=['tests']),
     description='Python client for Cebes HTTP server.',
+    long_description=open('README.rst', 'rb').read().decode('utf8'),
     author='Vu Pham',
     author_email='vuph@cebes.io',
     license='Apache 2.0',
-    long_description=open('README.rst', 'rb').read().decode('utf8'),
     install_requires=__read_requirements(),
 )

@@ -230,6 +230,9 @@ class SchemaField(object):
         return '{}(name={!r},storage_type={},variable_type={})'.format(
             self.__class__.__name__, self.name, self.storage_type.name, self.variable_type.name)
 
+    def __str__(self):
+        return super(SchemaField, self).__str__()
+
 
 @six.python_2_unicode_compatible
 class Schema(object):
@@ -256,6 +259,9 @@ class Schema(object):
     def __repr__(self):
         return '{}(fields=[{}])'.format(
             self.__class__.__name__, ','.join('{!r}'.format(f) for f in self.fields))
+
+    def __str__(self):
+        return super(Schema, self).__str__()
 
     def __len__(self):
         return len(self.fields)

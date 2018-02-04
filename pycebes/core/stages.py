@@ -326,6 +326,9 @@ class Stage(object):
                              for s in _get_slots(self.__class__, True))
         return '{}({})'.format(self.__class__.__name__, slot_desc)
 
+    def __str__(self):
+        return super(Stage, self).__str__()
+
     def __dir__(self):
         return dir(type(self)) + [p.name for p in _get_slots(self.__class__, True) + _get_slots(self.__class__, False)]
 

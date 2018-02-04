@@ -16,7 +16,7 @@ import docker
 import requests
 import six
 from docker import errors as docker_errors
-from future import utils
+from future import utils as future_utils
 from requests import exceptions as requests_exceptions
 
 from pycebes import config
@@ -29,7 +29,7 @@ def _get_docker_client():
         return docker.from_env(version='auto')
     except docker_errors.DockerException as e:
         err_msg = 'Could not create docker client: {}. Have you started the docker daemon?'.format(e)
-        utils.raise_from(ValueError(err_msg), e)
+        future_utils.raise_from(ValueError(err_msg), e)
 
 
 @six.python_2_unicode_compatible
@@ -41,6 +41,10 @@ class _CebesContainerInfo(object):
         self.container_ip = container_ip
         self.cebes_port = cebes_port
         self._logger = pycebes_helper.get_logger(self.__class__.__module__ + '.' + self.__class__.__name__)
+
+    def __repr__(self):
+        return '{}(name={}, image={}, cebes_port={})'.format(
+            self.__class__.__name__, self.name, self.image, self.cebes_port)
 
     def __str__(self):
         return '{}[{}] at port {}'.format(self.name, self.image, self.cebes_port)
@@ -66,6 +70,13 @@ class _CebesHttpServerContainerInfo(_CebesContainerInfo):
         super(_CebesHttpServerContainerInfo, self).__init__(
             name=name, image=image, container_ip=container_ip, cebes_port=cebes_port)
         self.spark_port = spark_port
+
+    def __repr__(self):
+        return '{}(name={}, image={}, cebes_port={}, spark_port={})'.format(
+            self.__class__.__name__, self.name, self.image, self.cebes_port, self.spark_port)
+
+    def __str__(self):
+        return '{}[{}] at port {}'.format(self.name, self.image, self.cebes_port)
 
 
 class _DockerContainerStarter(object):
@@ -132,7 +143,11 @@ class _DockerContainerStarter(object):
         data_path = os.path.join(os.path.expanduser('~/.cebes'), self._img_tag)
         if self._data_sub_dir:
             data_path = os.path.join(data_path, self._data_sub_dir)
-        os.makedirs(data_path, mode=0o700, exist_ok=True)
+        try:
+            os.makedirs(data_path, mode=0o700)
+        except os.error as ex:
+            if not os.path.exists(data_path):
+                future_utils.raise_from(ValueError('Failed to create data directory'), ex)
 
         # invent a name
         name_template = '{}-{}-{{}}'.format(self._container_name_prefix, self._img_tag)
@@ -216,11 +231,10 @@ class _RepositoryContainerStarter(_DockerContainerStarter):
         return {'22000/tcp': self._host_port}
 
     def _parse_container_attrs(self, attrs):
-        return _CebesHttpServerContainerInfo(
+        return _CebesContainerInfo(
             name=attrs['Name'][1:], image=attrs['Config']['Image'],
             container_ip=attrs['NetworkSettings']['IPAddress'],
-            cebes_port=int(attrs['NetworkSettings']['Ports']['22000/tcp'][0]['HostPort']),
-            spark_port=0)
+            cebes_port=int(attrs['NetworkSettings']['Ports']['22000/tcp'][0]['HostPort']))
 
 
 def get_cebes_http_server_container():

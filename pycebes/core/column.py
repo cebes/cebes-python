@@ -44,6 +44,9 @@ class Column(object):
     def __repr__(self):
         return '{}(expr={!r})'.format(self.__class__.__name__, self.expr)
 
+    def __str__(self):
+        return super(Column, self).__str__()
+
     """
     helpers
     """

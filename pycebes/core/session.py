@@ -77,6 +77,9 @@ class Session(object):
             self.__class__.__name__, self._client.host, self._client.port,
             self._client.user_name, self._client.api_version)
 
+    def __str__(self):
+        return super(Session, self).__str__()
+
     @property
     def client(self):
         """
