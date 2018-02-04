@@ -126,6 +126,9 @@ class Pipeline(object):
         stage_names = ', '.join(s.get_input(s.name) for s in self._stages)
         return '{}({})'.format(self.__class__.__name__, stage_names)
 
+    def __str__(self):
+        return super(Pipeline, self).__str__()
+
     def add(self, stage):
         """
         Add a stage into this pipeline. No-op if the stage is already in this pipeline.

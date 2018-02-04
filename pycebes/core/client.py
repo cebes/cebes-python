@@ -18,7 +18,7 @@ import random
 import time
 
 import requests
-from future.utils import raise_from
+from future import utils as future_utils
 from requests import exceptions as requests_exceptions
 from requests_toolbelt import MultipartEncoderMonitor
 
@@ -63,8 +63,8 @@ class Client(object):
             if self.interactive:
                 n = 20
                 pct = encoder.bytes_read / encoder.len
-                l = int(round(n * pct))
-                s = '\rUploading: {}{} {:.0f}%'.format('.' * l, ' ' * (max(0, n - l)), pct * 100)
+                size = int(round(n * pct))
+                s = '\rUploading: {}{} {:.0f}%'.format('.' * size, ' ' * (max(0, n - size)), pct * 100)
                 print(s, end='')
 
         with open(path, 'rb') as f:
@@ -92,8 +92,8 @@ class Client(object):
             return response.json()
 
         except requests_exceptions.ConnectionError as e:
-            # wrap this in the standard ConnectionError to ease end-users
-            raise_from(ConnectionError('{}'.format(e)), e)
+            # wrap this in the standard OSError to ease end-users
+            future_utils.raise_from(OSError('{}'.format(e)), e)
 
     def wait(self, request_id, sleep_base=0.5, max_count=100):
         """
