@@ -35,7 +35,7 @@ def get_logger(name):
     if next((c for c in logger.handlers if isinstance(c, logging.StreamHandler)), None) is None:
         ch = logging.StreamHandler()
         ch.setLevel(logging.INFO)
-        formatter = logging.Formatter('[%(levelname)-4s] %(name)-15s: %(message)s')
+        formatter = logging.Formatter('[%(levelname)-4s] %(filename)-10s: %(message)s')
         ch.setFormatter(formatter)
         logger.addHandler(ch)
     return logger

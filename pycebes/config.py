@@ -9,11 +9,9 @@
 #
 # See the NOTICE file distributed with this work for information regarding copyright ownership.
 
-VERSION = '0.8.0.dev0'
-
 # Docker image for running Cebes locally
-LOCAL_HTTP_SERVER_REPO = 'phvu/cebes-private'
-LOCAL_HTTP_SERVER_TAG = 'server-0.10.0-snapshot-mariadb'
+LOCAL_HTTP_SERVER_REPO = 'cebesio/http-server'
+LOCAL_HTTP_SERVER_TAG = '0.10.0'
 
-LOCAL_REPOSITORY_REPO = 'phvu/cebes-private'
-LOCAL_REPOSITORY_TAG = 'repo-0.10.0-snapshot-mariadb'
+LOCAL_REPOSITORY_REPO = 'cebesio/pipeline-repo'
+LOCAL_REPOSITORY_TAG = '0.10.0'
