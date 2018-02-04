@@ -35,4 +35,4 @@ Contributing
 If you'd like to contribute, fork the project, make a patch and send a pull request.
 
 In general, we keep track features in the main `cebes-server <https://github.com/cebes/cebes-server>`_ repository.
-Create an issue on this repository if it is `pycebes`-specific.
+Create an issue on this repository only if it is ``pycebes``-specific.
