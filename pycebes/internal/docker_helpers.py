@@ -157,6 +157,9 @@ class _DockerContainerStarter(object):
 
         self._logger.info('Starting container {}[{}:{}] with data path at {}'.format(
             container_name, self._img_repo, self._img_tag, data_path))
+        self._logger.info('This may take several minutes if Cebes needs to pull the image')
+        self._logger.info('If it takes too long, run "docker pull {}:{}" in a different console and try again'.format(
+            self._img_repo, self._img_tag))
 
         container = client.containers.run('{}:{}'.format(self._img_repo, self._img_tag),
                                           detach=True, ports=self._port_mapping(),
