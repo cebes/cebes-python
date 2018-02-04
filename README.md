@@ -1,5 +1,6 @@
 # cebes-python
-Python client for Cebes. See [cebes-server](https://github.com/cebes/cebes-server) for more information.
+Python client for Cebes. See [Cebes website](https://cebes.github.io) and 
+[cebes-server](https://github.com/cebes/cebes-server) for more information.
 
 ## Unit tests
 
