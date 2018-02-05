@@ -2,6 +2,18 @@
 cebes-python
 ============
 
+.. image:: http://img.shields.io/badge/license-Apache_2.0-brightgreen.svg?style=flat
+   :target: https://opensource.org/licenses/Apache-2.0
+   :alt: Apache 2.0 license
+
+.. image:: http://img.shields.io/github/issues/cebes/cebes-python.svg
+   :target: https://github.com/cebes/cebes-python/issues
+   :alt: Issues
+
+.. image:: https://badges.gitter.im/cebes-io/python.svg
+   :target: https://gitter.im/cebes-io/python
+   :alt: Gitter chat
+
 Python client for Cebes - an integrated framework for Data Science.
 
 See `Cebes website <https://cebes.github.io>`_ and
